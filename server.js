@@ -43,6 +43,45 @@ const db = {
 };
 
 // Cache for current user
+
+
+
+// Simple API protection - check for VibeCode origin or API key
+function checkAuth(req, res, next) {
+  // Skip for static files
+  if (!req.path.startsWith('/api/')) {
+    return next();
+  }
+  
+  // Check for API key in header (added by VibeCode proxy)
+  const apiKey = req.headers['x-api-key'] || req.headers['x-vibecode-key'];
+  
+  // Check if request is from VibeCode (by referer or origin)
+  const referer = req.headers.referer || '';
+  const origin = req.headers.origin || '';
+  const isFromVibeCode = referer.includes('vibecode.bitrix24') || 
+                         origin.includes('vibecode.bitrix24') ||
+                         referer.includes('bitrix24');
+  
+  // Allow if has API key or is from VibeCode
+  if (apiKey || isFromVibeCode) {
+    return next();
+  }
+  
+  // For development - allow localhost
+  const clientIp = req.ip || req.connection.remoteAddress;
+  if (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') {
+    return next();
+  }
+  
+  return res.status(401).json({
+    error: 'Unauthorized',
+    message: 'Please access this app through VibeCode'
+  });
+}
+
+// Apply protection
+app.use(checkAuth);
 let currentUser = null;
 
 // Helper to call VibeCode API
