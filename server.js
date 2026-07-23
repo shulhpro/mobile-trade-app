@@ -28,6 +28,17 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static('public'));
+// Debug: log all incoming headers
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log('=== Request:', req.method, req.path, '===');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    const token = getSessionToken(req);
+    console.log('Token found:', token ? token.substring(0, 20) + '...' : 'NONE');
+  }
+  next();
+});
+
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -511,6 +522,34 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+
+// Auth check endpoint
+app.get('/api/auth-check', async (req, res) => {
+  try {
+    const token = getSessionToken(req);
+    if (!token) {
+      return res.json({ 
+        authenticated: false, 
+        message: 'No session token found',
+        headers: req.headers
+      });
+    }
+    
+    // Try to get user info
+    const user = await getCurrentUser(req);
+    res.json({ 
+      authenticated: true, 
+      user: user,
+      tokenPrefix: token.substring(0, 20) + '...'
+    });
+  } catch (error) {
+    res.json({ 
+      authenticated: false, 
+      error: error.message,
+      tokenPresent: !!getSessionToken(req)
+    });
+  }
+});
 app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
 });
