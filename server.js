@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
@@ -79,7 +79,7 @@ function getSessionToken(req) {
 // Save session token to cookie
 function saveSessionToken(res, token) {
   if (token) {
-    res.setHeader('Set-Cookie', ibe_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400);
+    res.setHeader('Set-Cookie', 'vibe_session=' + token + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400');
   }
 }
 
