@@ -7,14 +7,12 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// API configuration
-const API_KEY = process.env.VIBECODE_API_KEY || 'vibe_api_B5LhuhAlxAfjnWVLTCD6RU0UsDWl6IvV_05fc97';
 const VIBECODE_API = 'https://vibecode.bitrix24.tech/v1';
 
 app.use(cors());
 app.use(express.json());
 
-// No-cache middleware for static files
+// No-cache middleware
 app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -42,54 +40,53 @@ const db = {
   orders: []
 };
 
-// Cache for current user
-
-
-
-// Simple API protection - check for VibeCode origin or API key
-function checkAuth(req, res, next) {
-  // Skip for static files
-  if (!req.path.startsWith('/api/')) {
-    return next();
-  }
-  
-  // Check for API key in header (added by VibeCode proxy)
-  const apiKey = req.headers['x-api-key'] || req.headers['x-vibecode-key'];
-  
-  // Check if request is from VibeCode (by referer or origin)
-  const referer = req.headers.referer || '';
-  const origin = req.headers.origin || '';
-  const isFromVibeCode = referer.includes('vibecode.bitrix24') || 
-                         origin.includes('vibecode.bitrix24') ||
-                         referer.includes('bitrix24');
-  
-  // Allow if has API key or is from VibeCode
-  if (apiKey || isFromVibeCode) {
-    return next();
-  }
-  
-  // For development - allow localhost
-  const clientIp = req.ip || req.connection.remoteAddress;
-  if (clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost') {
-    return next();
-  }
-  
-  return res.status(401).json({
-    error: 'Unauthorized',
-    message: 'Please access this app through VibeCode'
-  });
+// Get API key from request headers
+function getApiKey(req) {
+  return req.headers['x-api-key'] || req.headers['x-vibecode-key'] || null;
 }
 
-// Apply protection
-app.use(checkAuth);
-let currentUser = null;
+// Get current user from VibeCode API using request's API key
+async function getCurrentUser(req) {
+  const apiKey = getApiKey(req);
+  if (!apiKey) {
+    throw new Error('No API key provided');
+  }
+  
+  try {
+    const response = await fetch(VIBECODE_API + '/me', {
+      headers: {
+        'X-Api-Key': apiKey
+      }
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const data = await response.json();
+    if (data.success && data.data) {
+      const user = {
+        id: data.data.owner?.userId || data.data.user?.id || 1,
+        name: data.data.owner?.name || 'User'
+      };
+      console.log('Current user:', user);
+      return user;
+    }
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    throw error;
+  }
+  
+  throw new Error('Failed to get user info');
+}
 
-// Helper to call VibeCode API
-async function callVibeApi(endpoint) {
+// Helper to call VibeCode API with request's API key
+async function callVibeApi(req, endpoint) {
+  const apiKey = getApiKey(req);
+  if (!apiKey) {
+    throw new Error('No API key provided');
+  }
+  
   try {
     const response = await fetch(VIBECODE_API + endpoint, {
       headers: {
-        'X-Api-Key': API_KEY
+        'X-Api-Key': apiKey
       }
     });
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -97,259 +94,40 @@ async function callVibeApi(endpoint) {
     return data.success ? data.data : [];
   } catch (error) {
     console.error('API Error:', error);
-    return [];
+    throw error;
   }
 }
 
-// Get current user from VibeCode API
-async function getCurrentUser() {
-  if (currentUser) return currentUser;
+// Auth middleware - require API key for API routes
+function requireAuth(req, res, next) {
+  const apiKey = getApiKey(req);
   
-  try {
-    const response = await fetch(VIBECODE_API + '/me', {
-      headers: {
-        'X-Api-Key': API_KEY
-      }
+  if (!apiKey) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'API key required. Please login through VibeCode.'
     });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
-    if (data.success && data.data) {
-      currentUser = {
-        id: data.data.owner?.userId || data.data.user?.id || 1,
-        name: data.data.owner?.name || 'User'
-      };
-      console.log('Current user:', currentUser);
-      return currentUser;
-    }
-  } catch (error) {
-    console.error('Error getting current user:', error);
   }
   
-  return { id: 1, name: 'User' };
+  next();
 }
 
-
-
-// ============ VISITS API ============
-app.post('/api/visits', async (req, res) => {
-  try {
-    const user = await getCurrentUser();
-    const body = req.body || {};
-    
-    // Calculate order total
-    let orderItems = [];
-    let orderTotal = 0;
-    if (body.order && Array.isArray(body.order)) {
-      orderItems = body.order;
-      orderTotal = body.order.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    }
-    
-    const visit = {
-      id: Date.now(),
-      companyId: body.companyId,
-      companyName: body.companyName,
-      userId: user.id,
-      userName: user.name,
-      startTime: new Date().toISOString(),
-      endTime: new Date().toISOString(),
-      coords: body.coordinates || null,
-      photos: body.photos || [],
-      note: body.notes || '',
-      order: { 
-        items: orderItems, 
-        total: orderTotal 
-      },
-      status: 'completed'
-    };
-    
-    db.visits.push(visit);
-    res.json(visit);
-  } catch (error) {
-    console.error('Create visit error:', error);
-    res.status(500).json({ error: 'Failed to create visit', message: error.message });
-  }
-});
-
-app.get('/api/visits', (req, res) => {
-  res.json(db.visits);
-});
-
-app.get('/api/visits/:id', (req, res) => {
-  const visit = db.visits.find(v => v.id == req.params.id);
-  if (!visit) return res.status(404).json({ error: 'Visit not found' });
-  res.json(visit);
-});
-
-app.patch('/api/visits/:id/coords', (req, res) => {
-  const visit = db.visits.find(v => v.id == req.params.id);
-  if (!visit) return res.status(404).json({ error: 'Visit not found' });
-  visit.coords = req.body.coords;
-  res.json({ success: true, coords: visit.coords });
-});
-
-app.post('/api/visits/:id/photos', upload.single('photo'), (req, res) => {
-  const visit = db.visits.find(v => v.id == req.params.id);
-  if (!visit) return res.status(404).json({ error: 'Visit not found' });
-  if (req.file) {
-    const photoUrl = '/uploads/' + req.file.filename;
-    visit.photos.push({
-      url: photoUrl,
-      filename: req.file.originalname,
-      uploadedAt: new Date().toISOString()
-    });
-    res.json({ success: true, photo: visit.photos[visit.photos.length - 1] });
-  } else {
-    res.status(400).json({ error: 'No photo uploaded' });
-  }
-});
-
-app.patch('/api/visits/:id/note', (req, res) => {
-  const visit = db.visits.find(v => v.id == req.params.id);
-  if (!visit) return res.status(404).json({ error: 'Visit not found' });
-  visit.note = req.body.note || '';
-  res.json({ success: true, note: visit.note });
-});
-
-app.patch('/api/visits/:id/order', (req, res) => {
-  const visit = db.visits.find(v => v.id == req.params.id);
-  if (!visit) return res.status(404).json({ error: 'Visit not found' });
-  visit.order = req.body.order || { items: [], total: 0 };
-  const existingOrderIndex = db.orders.findIndex(o => o.visitId == visit.id);
-  const orderData = {
-    visitId: visit.id,
-    companyId: visit.companyId,
-    companyName: visit.companyName,
-    items: visit.order.items,
-    total: visit.order.total,
-    createdAt: new Date().toISOString()
-  };
-  if (existingOrderIndex >= 0) {
-    db.orders[existingOrderIndex] = orderData;
-  } else {
-    db.orders.push(orderData);
-  }
-  res.json({ success: true, order: visit.order });
-});
-
-app.post('/api/visits/:id/complete', async (req, res) => {
-  const visit = db.visits.find(v => v.id == req.params.id);
-  if (!visit) return res.status(404).json({ error: 'Visit not found' });
-  visit.status = 'completed';
-  visit.endTime = new Date().toISOString();
-  res.json({ success: true, visit, message: 'Visit completed successfully' });
-});
-
-app.get('/api/orders', (req, res) => {
-  res.json(db.orders);
-});
-
-app.get('/api/orders/:visitId', (req, res) => {
-  const order = db.orders.find(o => o.visitId == req.params.visitId);
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-  res.json(order);
-});
-
-app.post('/api/visits/:id/create-task', async (req, res) => {
-  try {
-    const visit = db.visits.find(v => v.id == req.params.id);
-    if (!visit) return res.status(404).json({ error: 'Visit not found' });
-    
-    // Get current user for responsibleId
-    let responsibleId = visit.userId;
-    if (!responsibleId) {
-      try {
-        const user = await getCurrentUser();
-        responsibleId = user.id;
-      } catch (e) {
-        responsibleId = 1; // fallback to admin
-      }
-    }
-    
-    // Build task description
-    let description = visit.notes || 'Visit completed';
-    if (visit.coordinates) {
-      description += `\n\nLocation: ${visit.coordinates.latitude}, ${visit.coordinates.longitude}`;
-    }
-    if (visit.photos && visit.photos.length > 0) {
-      description += `\n\nPhotos: ${visit.photos.length} photo(s) attached`;
-    }
-    
-    // Create task in Bitrix24 via VibeCode API using batch
-    const batchData = {
-      halt: 0,
-      cmd: {
-        create_task: `tasks.task.add?` + new URLSearchParams({
-          'fields[TITLE]': `Visit: ${visit.companyName}`,
-          'fields[DESCRIPTION]': description,
-          'fields[RESPONSIBLE_ID]': responsibleId.toString(),
-          'fields[PRIORITY]': '2',
-          'fields[STATUS]': '5',
-          'fields[GROUP_ID]': '0'
-        }).toString()
-      }
-    };
-    
-    const response = await fetch(VIBECODE_API + '/batch', {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': API_KEY,
-        'Content-Type': 'application/json; charset=utf-8'
-      },
-      body: JSON.stringify(batchData)
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-    
-    const result = await response.json();
-    
-    // Check for errors in batch response
-    if (result.result?.create_task?.error) {
-      throw new Error(result.result.result.create_task.error);
-    }
-    
-    const taskId = result.result?.results?.["0"]?.id || result.result?.results?.[0]?.id;
-    
-    res.json({
-      success: true,
-      message: 'Task created in Bitrix24',
-      taskId: taskId,
-      responsibleId: responsibleId,
-      visit: {
-        id: visit.id,
-        companyName: visit.companyName
-      }
-    });
-  } catch (error) {
-    console.error('Task creation error:', error);
-    res.status(500).json({ 
-      error: 'Failed to create task',
-      message: error.message 
-    });
-  }
-});
-
-app.use('/uploads', express.static('uploads'));
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
+// Apply auth to API routes
+app.use('/api', requireAuth);
 
 // ============ USER CONTEXT API ============
 app.get('/api/user-context', async (req, res) => {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
     
     // Get workgroups from Bitrix24
     let workgroups = [];
     try {
+      const apiKey = getApiKey(req);
       const response = await fetch(VIBECODE_API + '/batch', {
         method: 'POST',
         headers: {
-          'X-Api-Key': API_KEY,
+          'X-Api-Key': apiKey,
           'Content-Type': 'application/json; charset=utf-8'
         },
         body: JSON.stringify({
@@ -383,15 +161,15 @@ app.get('/api/user-context', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting user context:', error);
-    res.status(500).json({ error: 'Failed to get user context' });
+    res.status(500).json({ error: 'Failed to get user context', message: error.message });
   }
 });
 
-// ============ COMPANIES API (new format) ============
+// ============ COMPANIES API ============
 app.get('/api/companies', async (req, res) => {
   try {
     const search = req.query.search?.toLowerCase() || '';
-    const companies = await callVibeApi('/companies?limit=50');
+    const companies = await callVibeApi(req, '/companies?limit=50');
     
     let result = companies.map(c => ({
       id: c.id,
@@ -414,52 +192,14 @@ app.get('/api/companies', async (req, res) => {
     res.json({ result: result });
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to fetch companies' });
-  }
-});
-
-// ============ TASKS API ============
-app.get('/api/tasks/:companyId', async (req, res) => {
-  try {
-    const companyId = req.params.companyId;
-    
-    // Search for open tasks related to this company
-    const response = await fetch(VIBECODE_API + '/batch', {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': API_KEY,
-        'Content-Type': 'application/json; charset=utf-8'
-      },
-      body: JSON.stringify({
-        halt: 0,
-        cmd: {
-          get_tasks: `tasks.task.list?FILTER[UF_CRM_TASK]=CO_${companyId}&FILTER[STATUS]=2&ORDER[ID]=DESC&LIMIT=1`
-        }
-      })
-    });
-    
-    if (!response.ok) {
-      return res.json({ task: null });
-    }
-    
-    const data = await response.json();
-    const tasks = data.result?.result?.get_tasks || [];
-    
-    if (tasks.length > 0) {
-      res.json({ task: tasks[0] });
-    } else {
-      res.json({ task: null });
-    }
-  } catch (error) {
-    console.error('Error checking tasks:', error);
-    res.json({ task: null });
+    res.status(500).json({ error: 'Failed to fetch companies', message: error.message });
   }
 });
 
 // ============ SECTIONS API ============
 app.get('/api/sections', async (req, res) => {
   try {
-    const sections = await callVibeApi('/catalog-sections?filter[iblockId]=24&limit=50');
+    const sections = await callVibeApi(req, '/catalog-sections?filter[iblockId]=24&limit=50');
     
     const result = sections.map(s => ({
       id: s.id,
@@ -471,11 +211,11 @@ app.get('/api/sections', async (req, res) => {
     res.json({ result: result });
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to fetch sections' });
+    res.status(500).json({ error: 'Failed to fetch sections', message: error.message });
   }
 });
 
-// ============ PRODUCTS API (new format) ============
+// ============ PRODUCTS API ============
 app.get('/api/products', async (req, res) => {
   try {
     const sectionId = req.query.sectionId;
@@ -485,7 +225,7 @@ app.get('/api/products', async (req, res) => {
       endpoint = '/products?filter[sectionId]=' + sectionId + '&limit=50';
     }
     
-    const products = await callVibeApi(endpoint);
+    const products = await callVibeApi(req, endpoint);
     
     const result = products.map(p => ({
       id: p.id,
@@ -501,14 +241,15 @@ app.get('/api/products', async (req, res) => {
     res.json({ result: result });
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to fetch products' });
+    res.status(500).json({ error: 'Failed to fetch products', message: error.message });
   }
 });
 
-// ============ VISIT API (multipart/form-data) ============
+// ============ VISIT API ============
 app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
+    const apiKey = getApiKey(req);
     const companyId = req.body.companyId;
     const subject = req.body.subject || 'Visit';
     const description = req.body.description || '';
@@ -527,7 +268,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     }
     
     // Build task description
-    let taskDescription = description;
+    let taskDescription = description || '';
     if (noteText) {
       taskDescription += '\n\nNotes: ' + noteText;
     }
@@ -537,12 +278,21 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     if (orderData && orderData.items && orderData.items.length > 0) {
       taskDescription += '\n\nOrder:\n';
       orderData.items.forEach(item => {
-        taskDescription += `- ${item.name}: ${item.quantity} x ${item.price}? = ${(item.quantity * item.price).toFixed(2)}?\n`;
+        taskDescription += `- ${item.name}: ${item.quantity} x ${item.price}р = ${(item.quantity * item.price).toFixed(2)}р\n`;
       });
-      taskDescription += `\nTotal: ${orderData.total.toFixed(2)}?`;
+      taskDescription += `\nTotal: ${orderData.total.toFixed(2)}р`;
     }
     
-    // Create or update task in Bitrix24
+    // Add photo links to description
+    if (photoUrls && photoUrls.length > 0) {
+      taskDescription += '\n\n[B]Photos:[/B]\n';
+      photoUrls.forEach((url, index) => {
+        const fullUrl = req.protocol + '://' + req.get('host') + url;
+        taskDescription += `[URL=${fullUrl}]Photo ${index + 1} - Click to view[/URL]\n`;
+      });
+    }
+    
+    // Create task in Bitrix24
     const batchData = {
       halt: 0,
       calls: [
@@ -565,7 +315,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'X-Api-Key': API_KEY,
+        'X-Api-Key': apiKey,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
@@ -577,7 +327,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     }
     
     const result = await response.json();
-    const taskId = result.result?.results?.["0"]?.id || result.result?.results?.[0]?.id;
+    const taskId = result.data?.results?.["0"]?.id || result.data?.results?.[0]?.id;
     
     // Save visit to local DB
     const visit = {
@@ -612,10 +362,13 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   }
 });
 
-// Get current user's tasks
+// ============ TASKS API ============
 app.get('/api/my-tasks', async (req, res) => {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
+    const apiKey = getApiKey(req);
+    
+    console.log('Loading tasks for user:', user.id);
     
     const batchData = {
       halt: 0,
@@ -637,7 +390,7 @@ app.get('/api/my-tasks', async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'X-Api-Key': API_KEY,
+        'X-Api-Key': apiKey,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
@@ -648,11 +401,14 @@ app.get('/api/my-tasks', async (req, res) => {
     }
     
     const data = await response.json();
-    // Correct path: data.data.results["0"]
     const tasks = data.data?.results?.["0"] || [];
-    console.log('Loaded tasks:', tasks.length);
     
-    res.json({ success: true, tasks: tasks });
+    // Double-check: filter only tasks for current user
+    const userTasks = tasks.filter(t => t.responsibleId == user.id);
+    
+    console.log('Loaded tasks:', tasks.length, 'Filtered for user:', userTasks.length);
+    
+    res.json({ success: true, tasks: userTasks });
   } catch (error) {
     console.error('Error loading tasks:', error);
     res.status(500).json({ error: 'Failed to load tasks', message: error.message });
@@ -663,6 +419,7 @@ app.get('/api/my-tasks', async (req, res) => {
 app.post('/api/tasks/:id/complete', async (req, res) => {
   try {
     const taskId = req.params.id;
+    const apiKey = getApiKey(req);
     
     const batchData = {
       halt: 0,
@@ -672,7 +429,7 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
           action: "update",
           params: {
             ID: parseInt(taskId),
-            STATUS: 5 // Completed
+            STATUS: 5
           }
         }
       ]
@@ -681,7 +438,7 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'X-Api-Key': API_KEY,
+        'X-Api-Key': apiKey,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
@@ -691,19 +448,65 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
       throw new Error('HTTP ' + response.status);
     }
     
-    const data = await response.json();
-    
     res.json({ success: true, message: 'Task completed' });
   } catch (error) {
     console.error('Error completing task:', error);
     res.status(500).json({ error: 'Failed to complete task', message: error.message });
   }
 });
+
+// ============ VISITS API (legacy) ============
+app.post('/api/visits', async (req, res) => {
+  try {
+    const user = await getCurrentUser(req);
+    const body = req.body || {};
+    
+    let orderItems = [];
+    let orderTotal = 0;
+    if (body.order && Array.isArray(body.order)) {
+      orderItems = body.order;
+      orderTotal = body.order.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    }
+    
+    const visit = {
+      id: Date.now(),
+      companyId: body.companyId,
+      companyName: body.companyName,
+      userId: user.id,
+      userName: user.name,
+      startTime: new Date().toISOString(),
+      endTime: new Date().toISOString(),
+      coords: body.coordinates || null,
+      photos: body.photos || [],
+      note: body.notes || '',
+      order: { items: orderItems, total: orderTotal },
+      status: 'completed'
+    };
+    
+    db.visits.push(visit);
+    res.json(visit);
+  } catch (error) {
+    console.error('Create visit error:', error);
+    res.status(500).json({ error: 'Failed to create visit', message: error.message });
+  }
+});
+
+app.get('/api/visits', (req, res) => {
+  res.json(db.visits);
+});
+
+app.get('/api/visits/:id', (req, res) => {
+  const visit = db.visits.find(v => v.id == req.params.id);
+  if (!visit) return res.status(404).json({ error: 'Visit not found' });
+  res.json(visit);
+});
+
+app.use('/uploads', express.static('uploads'));
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
 });
-
-
-
-
-

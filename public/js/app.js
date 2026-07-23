@@ -11,6 +11,39 @@ let selectedProjectId = null;
 let sections = [];
 let currentSectionId = null;
 let isSubmitting = false;
+// API Key management
+let apiKey = localStorage.getItem('vibecode_api_key') || '';
+
+// Helper to make authenticated API calls
+async function apiFetch(url, options = {}) {
+  const headers = options.headers || {};
+  
+  // Add API key if available
+  if (apiKey) {
+    headers['X-Api-Key'] = apiKey;
+  }
+  
+  const response = await fetch(url, {
+    ...options,
+    headers: headers
+  });
+  
+  // If unauthorized, redirect to login
+  if (response.status === 401) {
+    showToast('Session expired. Please login again.');
+    // Clear stored key
+    localStorage.removeItem('vibecode_api_key');
+    apiKey = '';
+    // Show login screen or reload
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+    throw new Error('Unauthorized');
+  }
+  
+  return response;
+}
+
 
 // Clear cache and reload app
 async function clearCacheAndReload() {
@@ -55,7 +88,7 @@ if (document.readyState === 'loading') {
 // Load user context (info + workgroups + department head)
 async function loadUserContext() {
   try {
-    const response = await fetch('/api/user-context');
+    const response = await apiFetch('/api/user-context');
     const data = await response.json();
     userContext = data;
     
@@ -113,7 +146,7 @@ function renderProjectSelector(workgroups) {
 // Load companies
 async function loadCompanies() {
   try {
-    const response = await fetch('/api/companies');
+    const response = await apiFetch('/api/companies');
     const data = await response.json();
     companies = data.result || [];
     renderCompanies(companies);
@@ -153,7 +186,7 @@ async function selectCompany(companyId) {
   
   // Check for existing task
   try {
-    const response = await fetch('/api/tasks/' + (currentCompany.id || currentCompany.ID));
+    const response = await apiFetch('/api/tasks/' + (currentCompany.id || currentCompany.ID));
     const data = await response.json();
     currentTask = data.task;
   } catch (error) {
@@ -292,7 +325,7 @@ async function loadProductsForOrder() {
 
 async function loadSections() {
   try {
-    const response = await fetch('/api/sections');
+    const response = await apiFetch('/api/sections');
     const data = await response.json();
     sections = data.result || [];
     renderSections();
@@ -328,7 +361,7 @@ async function loadProductsBySection(sectionId) {
   currentSectionId = sectionId;
   
   try {
-    const response = await fetch('/api/products?sectionId=' + sectionId);
+    const response = await apiFetch('/api/products?sectionId=' + sectionId);
     const data = await response.json();
     products = data.result || [];
     renderProducts();
@@ -466,7 +499,7 @@ async function submitVisit(closeVisit) {
   });
   
   try {
-    const response = await fetch('/api/visit', {
+    const response = await apiFetch('/api/visit', {
       method: 'POST',
       body: formData
     });
@@ -541,7 +574,7 @@ async function loadTasks() {
   container.innerHTML = '<div class="loading">Загрузка задач...</div>';
   
   try {
-    const response = await fetch('/api/my-tasks');
+    const response = await apiFetch('/api/my-tasks');
     const data = await response.json();
     currentTasks = data.tasks || [];
     renderTasks();
@@ -651,7 +684,7 @@ async function completeTask(taskId) {
   showLoadingOverlay(true);
   
   try {
-    const response = await fetch('/api/tasks/' + taskId + '/complete', {
+    const response = await apiFetch('/api/tasks/' + taskId + '/complete', {
       method: 'POST'
     });
     
