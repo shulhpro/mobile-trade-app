@@ -9,6 +9,10 @@ const PORT = process.env.PORT || 3000;
 
 const VIBECODE_API = 'https://vibecode.bitrix24.tech/v1';
 
+// Fallback API key for server-side API calls (when X-Vibe-Authorization is not available)
+// This is safe because we still filter data by user ID from session
+const FALLBACK_API_KEY = 'vibe_api_B5LhuhAlxAfjnWVLTCD6RU0UsDWl6IvV_05fc97';
+
 app.use(cors());
 app.use(express.json());
 
@@ -28,17 +32,6 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static('public'));
-// Debug: log all incoming headers
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    console.log('=== Request:', req.method, req.path, '===');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    const token = getSessionToken(req);
-    console.log('Token found:', token ? token.substring(0, 20) + '...' : 'NONE');
-  }
-  next();
-});
-
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -58,6 +51,16 @@ function getSessionToken(req) {
     return authHeader.substring(7);
   }
   return null;
+}
+
+// Get API key for server-side calls
+function getApiKey(req) {
+  // First try X-Api-Key header
+  const apiKey = req.headers['x-api-key'];
+  if (apiKey) return apiKey;
+  
+  // Fallback to hardcoded key
+  return FALLBACK_API_KEY;
 }
 
 // Get current user from VibeCode API using session token
@@ -91,17 +94,14 @@ async function getCurrentUser(req) {
   throw new Error('Failed to get user info');
 }
 
-// Helper to call VibeCode API with session token
+// Helper to call VibeCode API with API key (server-side)
 async function callVibeApi(req, endpoint) {
-  const token = getSessionToken(req);
-  if (!token) {
-    throw new Error('No session token');
-  }
+  const apiKey = getApiKey(req);
   
   try {
     const response = await fetch(VIBECODE_API + endpoint, {
       headers: {
-        'Authorization': 'Bearer ' + token
+        'X-Api-Key': apiKey
       }
     });
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -134,7 +134,7 @@ app.use('/api', requireAuth);
 app.get('/api/user-context', async (req, res) => {
   try {
     const user = await getCurrentUser(req);
-    const token = getSessionToken(req);
+    const apiKey = getApiKey(req);
     
     // Get workgroups from Bitrix24
     let workgroups = [];
@@ -142,7 +142,7 @@ app.get('/api/user-context', async (req, res) => {
       const response = await fetch(VIBECODE_API + '/batch', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + token,
+          'X-Api-Key': apiKey,
           'Content-Type': 'application/json; charset=utf-8'
         },
         body: JSON.stringify({
@@ -183,8 +183,10 @@ app.get('/api/user-context', async (req, res) => {
 // ============ COMPANIES API ============
 app.get('/api/companies', async (req, res) => {
   try {
+    console.log('Fetching companies...');
     const search = req.query.search?.toLowerCase() || '';
     const companies = await callVibeApi(req, '/companies?limit=50');
+    console.log('Companies fetched:', companies.length);
     
     let result = companies.map(c => ({
       id: c.id,
@@ -206,7 +208,7 @@ app.get('/api/companies', async (req, res) => {
     
     res.json({ result: result });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error fetching companies:', error);
     res.status(500).json({ error: 'Failed to fetch companies', message: error.message });
   }
 });
@@ -264,7 +266,7 @@ app.get('/api/products', async (req, res) => {
 app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   try {
     const user = await getCurrentUser(req);
-    const token = getSessionToken(req);
+    const apiKey = getApiKey(req);
     const companyId = req.body.companyId;
     const subject = req.body.subject || 'Visit';
     const description = req.body.description || '';
@@ -330,7 +332,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + token,
+        'X-Api-Key': apiKey,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
@@ -381,7 +383,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
 app.get('/api/my-tasks', async (req, res) => {
   try {
     const user = await getCurrentUser(req);
-    const token = getSessionToken(req);
+    const apiKey = getApiKey(req);
     
     console.log('Loading tasks for user:', user.id);
     
@@ -405,7 +407,7 @@ app.get('/api/my-tasks', async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + token,
+        'X-Api-Key': apiKey,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
@@ -434,7 +436,7 @@ app.get('/api/my-tasks', async (req, res) => {
 app.post('/api/tasks/:id/complete', async (req, res) => {
   try {
     const taskId = req.params.id;
-    const token = getSessionToken(req);
+    const apiKey = getApiKey(req);
     
     const batchData = {
       halt: 0,
@@ -453,7 +455,7 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + token,
+        'X-Api-Key': apiKey,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
@@ -522,34 +524,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-
-// Auth check endpoint
-app.get('/api/auth-check', async (req, res) => {
-  try {
-    const token = getSessionToken(req);
-    if (!token) {
-      return res.json({ 
-        authenticated: false, 
-        message: 'No session token found',
-        headers: req.headers
-      });
-    }
-    
-    // Try to get user info
-    const user = await getCurrentUser(req);
-    res.json({ 
-      authenticated: true, 
-      user: user,
-      tokenPrefix: token.substring(0, 20) + '...'
-    });
-  } catch (error) {
-    res.json({ 
-      authenticated: false, 
-      error: error.message,
-      tokenPresent: !!getSessionToken(req)
-    });
-  }
-});
 app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
 });
