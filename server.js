@@ -8,7 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // API configuration
-const API_KEY = 'vibe_api_B5LhuhAlxAfjnWVLTCD6RU0UsDWl6IvV_05fc97';
+const API_KEY = process.env.VIBECODE_API_KEY || 'vibe_api_B5LhuhAlxAfjnWVLTCD6RU0UsDWl6IvV_05fc97';
 const VIBECODE_API = 'https://vibecode.bitrix24.tech/v1';
 
 app.use(cors());
