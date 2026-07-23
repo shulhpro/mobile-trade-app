@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'mobile-trade-v1';
+const CACHE_NAME = 'mobile-trade-v1';
 const urlsToCache = [
   '/',
   '/css/style.css',

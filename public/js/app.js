@@ -1,4 +1,4 @@
-﻿// Mobile Trade App - Frontend Logic
+// Mobile Trade App - Frontend Logic
 let currentCompany = null;
 let companies = [];
 let products = [];
