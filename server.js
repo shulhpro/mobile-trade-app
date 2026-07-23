@@ -40,22 +40,26 @@ const db = {
   orders: []
 };
 
-// Get API key from request headers
-function getApiKey(req) {
-  return req.headers['x-api-key'] || req.headers['x-vibecode-key'] || null;
+// Get session token from X-Vibe-Authorization header (injected by Black Hole Gateway)
+function getSessionToken(req) {
+  const authHeader = req.headers['x-vibe-authorization'] || req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  return null;
 }
 
-// Get current user from VibeCode API using request's API key
+// Get current user from VibeCode API using session token
 async function getCurrentUser(req) {
-  const apiKey = getApiKey(req);
-  if (!apiKey) {
-    throw new Error('No API key provided');
+  const token = getSessionToken(req);
+  if (!token) {
+    throw new Error('No session token - please authenticate through VibeCode');
   }
   
   try {
     const response = await fetch(VIBECODE_API + '/me', {
       headers: {
-        'X-Api-Key': apiKey
+        'Authorization': 'Bearer ' + token
       }
     });
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -76,17 +80,17 @@ async function getCurrentUser(req) {
   throw new Error('Failed to get user info');
 }
 
-// Helper to call VibeCode API with request's API key
+// Helper to call VibeCode API with session token
 async function callVibeApi(req, endpoint) {
-  const apiKey = getApiKey(req);
-  if (!apiKey) {
-    throw new Error('No API key provided');
+  const token = getSessionToken(req);
+  if (!token) {
+    throw new Error('No session token');
   }
   
   try {
     const response = await fetch(VIBECODE_API + endpoint, {
       headers: {
-        'X-Api-Key': apiKey
+        'Authorization': 'Bearer ' + token
       }
     });
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -98,14 +102,14 @@ async function callVibeApi(req, endpoint) {
   }
 }
 
-// Auth middleware - require API key for API routes
+// Auth middleware - require session token for API routes
 function requireAuth(req, res, next) {
-  const apiKey = getApiKey(req);
+  const token = getSessionToken(req);
   
-  if (!apiKey) {
+  if (!token) {
     return res.status(401).json({
       error: 'Unauthorized',
-      message: 'API key required. Please login through VibeCode.'
+      message: 'Please authenticate through VibeCode'
     });
   }
   
@@ -119,15 +123,15 @@ app.use('/api', requireAuth);
 app.get('/api/user-context', async (req, res) => {
   try {
     const user = await getCurrentUser(req);
+    const token = getSessionToken(req);
     
     // Get workgroups from Bitrix24
     let workgroups = [];
     try {
-      const apiKey = getApiKey(req);
       const response = await fetch(VIBECODE_API + '/batch', {
         method: 'POST',
         headers: {
-          'X-Api-Key': apiKey,
+          'Authorization': 'Bearer ' + token,
           'Content-Type': 'application/json; charset=utf-8'
         },
         body: JSON.stringify({
@@ -249,7 +253,7 @@ app.get('/api/products', async (req, res) => {
 app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   try {
     const user = await getCurrentUser(req);
-    const apiKey = getApiKey(req);
+    const token = getSessionToken(req);
     const companyId = req.body.companyId;
     const subject = req.body.subject || 'Visit';
     const description = req.body.description || '';
@@ -315,7 +319,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'X-Api-Key': apiKey,
+        'Authorization': 'Bearer ' + token,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
@@ -366,7 +370,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
 app.get('/api/my-tasks', async (req, res) => {
   try {
     const user = await getCurrentUser(req);
-    const apiKey = getApiKey(req);
+    const token = getSessionToken(req);
     
     console.log('Loading tasks for user:', user.id);
     
@@ -390,7 +394,7 @@ app.get('/api/my-tasks', async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'X-Api-Key': apiKey,
+        'Authorization': 'Bearer ' + token,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
@@ -419,7 +423,7 @@ app.get('/api/my-tasks', async (req, res) => {
 app.post('/api/tasks/:id/complete', async (req, res) => {
   try {
     const taskId = req.params.id;
-    const apiKey = getApiKey(req);
+    const token = getSessionToken(req);
     
     const batchData = {
       halt: 0,
@@ -438,7 +442,7 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
     const response = await fetch(VIBECODE_API + '/batch', {
       method: 'POST',
       headers: {
-        'X-Api-Key': apiKey,
+        'Authorization': 'Bearer ' + token,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(batchData)
