@@ -44,13 +44,43 @@ const db = {
   orders: []
 };
 
-// Get session token from X-Vibe-Authorization header (injected by Black Hole Gateway)
+// Parse cookies from request
+function parseCookies(req) {
+  const cookies = {};
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    cookieHeader.split(';').forEach(cookie => {
+      const [name, value] = cookie.trim().split('=');
+      if (name && value) {
+        cookies[name] = decodeURIComponent(value);
+      }
+    });
+  }
+  return cookies;
+}
+
+// Get session token from header or cookie
 function getSessionToken(req) {
+  // First check X-Vibe-Authorization header (from Gateway)
   const authHeader = req.headers['x-vibe-authorization'] || req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7);
   }
+  
+  // Then check cookie (for AJAX requests)
+  const cookies = parseCookies(req);
+  if (cookies.vibe_session) {
+    return cookies.vibe_session;
+  }
+  
   return null;
+}
+
+// Save session token to cookie
+function saveSessionToken(res, token) {
+  if (token) {
+    res.setHeader('Set-Cookie', ibe_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400);
+  }
 }
 
 // Get API key for server-side calls
@@ -116,6 +146,12 @@ async function callVibeApi(req, endpoint) {
 // Auth middleware - require session token for API routes
 function requireAuth(req, res, next) {
   const token = getSessionToken(req);
+  
+  // If token from header, save to cookie for future AJAX requests
+  const headerToken = req.headers['x-vibe-authorization'];
+  if (headerToken && headerToken.startsWith('Bearer ')) {
+    saveSessionToken(res, headerToken.substring(7));
+  }
   
   if (!token) {
     return res.status(401).json({
