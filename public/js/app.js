@@ -1,4 +1,4 @@
-// Mobile Trade App - Frontend Logic
+﻿// Mobile Trade App - Frontend Logic
 let currentCompany = null;
 let companies = [];
 let products = [];
@@ -11,35 +11,38 @@ let selectedProjectId = null;
 let sections = [];
 let currentSectionId = null;
 let isSubmitting = false;
-// API Key management
-let apiKey = localStorage.getItem('vibecode_api_key') || '';
+// Session token management
+let sessionToken = null;
+
+// Get session token from server
+async function initSession() {
+  try {
+    const response = await fetch('/api/session');
+    const data = await response.json();
+    if (data.authenticated && data.token) {
+      sessionToken = data.token;
+      console.log('Session initialized for user:', data.user);
+    } else {
+      console.log('No active session');
+    }
+  } catch (error) {
+    console.error('Error initializing session:', error);
+  }
+}
 
 // Helper to make authenticated API calls
 async function apiFetch(url, options = {}) {
   const headers = options.headers || {};
   
-  // Add API key if available
-  if (apiKey) {
-    headers['X-Api-Key'] = apiKey;
+  // Add session token if available
+  if (sessionToken) {
+    headers['X-Vibe-Authorization'] = 'Bearer ' + sessionToken;
   }
   
   const response = await fetch(url, {
     ...options,
     headers: headers
   });
-  
-  // If unauthorized, redirect to login
-  if (response.status === 401) {
-    showToast('Session expired. Please login again.');
-    // Clear stored key
-    localStorage.removeItem('vibecode_api_key');
-    apiKey = '';
-    // Show login screen or reload
-    setTimeout(() => {
-      window.location.reload();
-    }, 2000);
-    throw new Error('Unauthorized');
-  }
   
   return response;
 }

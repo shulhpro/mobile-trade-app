@@ -139,6 +139,24 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Get current session info
+app.get('/api/session', async (req, res) => {
+  try {
+    const token = getSessionToken(req);
+    const user = await getCurrentUser(req);
+    
+    res.json({
+      authenticated: !!token,
+      token: token ? token.substring(0, 20) + '...' : null,
+      user: user
+    });
+  } catch (error) {
+    res.json({
+      authenticated: false,
+      error: error.message
+    });
+  }
+});
 app.get('/api/user-context', async (req, res) => {
   try {
     const user = await getCurrentUser(req);
