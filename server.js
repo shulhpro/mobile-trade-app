@@ -586,8 +586,7 @@ app.get('/api/my-tasks', async (req, res) => {
           action: "list",
           params: {
             FILTER: {
-              RESPONSIBLE_ID: parseInt(user.id),
-              STATUS: [2, 3, 4, 6] // Open, waiting, in progress, deferred
+              RESPONSIBLE_ID: parseInt(user.id)
             },
             ORDER: { ID: "DESC" },
             LIMIT: 50
@@ -610,7 +609,9 @@ app.get('/api/my-tasks', async (req, res) => {
     }
     
     const data = await response.json();
-    const tasks = data.result?.results?.["0"] || [];
+    // Correct path: data.data.results["0"]
+    const tasks = data.data?.results?.["0"] || [];
+    console.log('Loaded tasks:', tasks.length);
     
     res.json({ success: true, tasks: tasks });
   } catch (error) {
