@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=27">
+  <link rel="stylesheet" href="css/style.css?v=29">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -17,9 +17,6 @@
     <header class="app-header">
       <h1>🏭 Мобильная торговля</h1>
       <div class="header-actions">
-        <button class="btn-dashboard" onclick="showScreen('dashboardScreen')" title="Дашборд">
-          📊
-        </button>
         <button class="btn-refresh" onclick="clearCacheAndReload()" title="Обновить данные">
           🔄
         </button>
@@ -27,20 +24,36 @@
       </div>
     </header>
 
-    <!-- Project Selector -->
-    <div id="projectSelectorContainer" style="display: none;">
-      <div class="project-selector">
-        <label for="projectSelect">📁 Проект:</label>
-        <select id="projectSelect">
-          <option value="">-- Выберите проект --</option>
-        </select>
-      </div>
-    </div>
-
     <!-- Main Content -->
     <main class="app-main">
+      <!-- Start Screen -->
+      <section id="startScreen" class="screen active">
+        <div class="start-screen-content">
+          <div class="welcome-text">
+            <h2>Добро пожаловать</h2>
+            <p>Выберите действие</p>
+          </div>
+          
+          <div class="main-actions">
+            <button class="main-action-btn visits" onclick="showScreen('companyScreen')">
+              <span class="icon">🏢</span>
+              <span class="label">Визиты</span>
+              <span class="description">Начать визит к клиенту</span>
+            </button>
+            
+            <button class="main-action-btn tasks" onclick="loadTasks()">
+              <span class="icon">📋</span>
+              <span class="label">Задачи</span>
+              <span class="description">Мои текущие задачи</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- Company Selection Screen -->
-      <section id="companyScreen" class="screen active">
+      <section id="companyScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('startScreen')">&lt; Назад</button>
+        <h2>Выбор компании</h2>
         <div class="search-box">
           <input type="text" id="companySearch" placeholder="🔍 Поиск компании...">
         </div>
@@ -62,10 +75,31 @@
         </div>
       </section>
 
+      <!-- Tasks Screen -->
+      <section id="tasksScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('startScreen')">&lt; Назад</button>
+        <h2>Мои задачи</h2>
+        <div class="tasks-filter">
+          <button class="filter-btn active" onclick="filterTasks('all')">Все</button>
+          <button class="filter-btn" onclick="filterTasks('open')">Открытые</button>
+          <button class="filter-btn" onclick="filterTasks('closed')">Завершенные</button>
+        </div>
+        <div class="tasks-list" id="tasksList">
+          <div class="loading">Загрузка задач...</div>
+        </div>
+      </section>
+
+      <!-- Task Detail Screen -->
+      <section id="taskDetailScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('tasksScreen')">&lt; Назад к задачам</button>
+        <div class="task-detail" id="taskDetail"></div>
+        <div class="task-actions" id="taskActions"></div>
+      </section>
+
       <!-- Unified Visit Form -->
       <section id="visitFormScreen" class="screen">
         <button class="btn-back" onclick="showScreen('companyDetailScreen')">&lt; Назад</button>
-        <h2>📝 Визит к клиенту</h2>
+        <h2>Визит к клиенту</h2>
         <form id="visitForm" class="action-form">
           <div class="form-group">
             <label>Компания</label>
@@ -74,36 +108,34 @@
 
           <!-- Location Section -->
           <div class="form-section">
-            <h3>📍 Геолокация</h3>
+            <h3>Геолокация</h3>
             <button type="button" class="btn-location" onclick="getLocation()">
-              📍 Получить координаты
+              Получить координаты
             </button>
             <div id="locationDisplay" class="location-display"></div>
           </div>
 
           <!-- Photos Section -->
           <div class="form-section">
-            <h3>📸 Фотографии</h3>
+            <h3>Фотографии</h3>
             <input type="file" id="photoInput" accept="image/*" multiple capture="environment">
             <div id="photoPreview" class="photo-preview"></div>
           </div>
 
           <!-- Notes Section -->
           <div class="form-section">
-            <h3>📝 Заметки</h3>
+            <h3>Заметки</h3>
             <textarea id="noteText" rows="4" placeholder="Ваши заметки по визиту..."></textarea>
           </div>
 
           <!-- Order Section -->
           <div class="form-section">
-            <h3>🛒 Заказ</h3>
+            <h3>Заказ</h3>
             
-            <!-- Sections List -->
             <div id="sectionsList" class="sections-list">
               <div class="loading">Загрузка разделов...</div>
             </div>
             
-            <!-- Products List (hidden initially) -->
             <div id="productsList" class="products-list" style="display: none;">
               <button type="button" class="btn-back-sections" onclick="showSections()">&lt; Назад к разделам</button>
               <div id="productsContainer"></div>
@@ -116,17 +148,17 @@
 
           <!-- Comment Section -->
           <div class="form-section">
-            <h3>💬 Комм к задаче</h3>
-            <textarea id="visitComment" rows="3" placeholder="Комм к задаче в Битрикс..."></textarea>
+            <h3>Комментарий к задаче</h3>
+            <textarea id="visitComment" rows="3" placeholder="Комментарий к задаче в Битрикс..."></textarea>
           </div>
 
           <!-- Action Buttons -->
           <div class="form-actions">
             <button type="button" class="btn-save" onclick="submitVisit(false)">
-              💾 Сохранить визит
+              Сохранить визит
             </button>
             <button type="button" class="btn-close" onclick="submitVisit(true)">
-              ✓ Завершить визит
+              Завершить визит
             </button>
           </div>
         </form>
@@ -138,7 +170,7 @@
           <div class="success-icon">✓</div>
           <h2 id="successTitle">Успешно!</h2>
           <p id="successMessage">Данные сохранены</p>
-          <button class="btn-submit" onclick="showScreen('companyDetailScreen')">Вернуться к компании</button>
+          <button class="btn-submit" onclick="showScreen('startScreen')">На главную</button>
         </div>
       </section>
     </main>
@@ -153,6 +185,6 @@
         <div class="loading-text">Сохранение визита...</div>
       </div>
     </div>
-  <script src="js/app.js?v=26"></script>
+  <script src="js/app.js?v=28"></script>
 </body>
 </html>

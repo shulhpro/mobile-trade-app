@@ -529,6 +529,151 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+
+// ===== TASKS MANAGEMENT =====
+let currentTasks = [];
+let currentTaskFilter = 'all';
+
+// Load tasks from Bitrix24
+async function loadTasks() {
+  showScreen('tasksScreen');
+  const container = document.getElementById('tasksList');
+  container.innerHTML = '<div class="loading">Загрузка задач...</div>';
+  
+  try {
+    const response = await fetch('/api/my-tasks');
+    const data = await response.json();
+    currentTasks = data.tasks || [];
+    renderTasks();
+  } catch (error) {
+    console.error('Error loading tasks:', error);
+    container.innerHTML = '<div class="loading">Ошибка загрузки задач</div>';
+  }
+}
+
+// Render tasks list
+function renderTasks() {
+  const container = document.getElementById('tasksList');
+  
+  let filteredTasks = currentTasks;
+  if (currentTaskFilter === 'open') {
+    filteredTasks = currentTasks.filter(t => t.status !== '5' && t.status !== 'completed');
+  } else if (currentTaskFilter === 'closed') {
+    filteredTasks = currentTasks.filter(t => t.status === '5' || t.status === 'completed');
+  }
+  
+  if (filteredTasks.length === 0) {
+    container.innerHTML = '<div class="loading">Задачи не найдены</div>';
+    return;
+  }
+  
+  container.innerHTML = filteredTasks.map(task => {
+    const isCompleted = task.status === '5' || task.status === 'completed';
+    const statusClass = isCompleted ? 'completed' : 'open';
+    const statusText = isCompleted ? 'Завершена' : 'Открыта';
+    const deadline = task.deadline ? new Date(task.deadline).toLocaleDateString('ru-RU') : 'Без срока';
+    
+    return '<div class="task-item ' + statusClass + '" onclick="showTaskDetail(' + task.id + ')">' +
+      '<div class="task-title">' + escapeHtml(task.title) + '</div>' +
+      '<div class="task-meta">' +
+        '<span class="task-status ' + statusClass + '">' + statusText + '</span>' +
+        '<span>Срок: ' + deadline + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// Filter tasks
+function filterTasks(filter) {
+  currentTaskFilter = filter;
+  
+  // Update active button
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  renderTasks();
+}
+
+// Show task detail
+function showTaskDetail(taskId) {
+  const task = currentTasks.find(t => t.id == taskId);
+  if (!task) return;
+  
+  const isCompleted = task.status === '5' || task.status === 'completed';
+  const statusText = isCompleted ? 'Завершена' : 'Открыта';
+  const deadline = task.deadline ? new Date(task.deadline).toLocaleDateString('ru-RU') : 'Без срока';
+  const createdDate = task.createdDate ? new Date(task.createdDate).toLocaleDateString('ru-RU') : 'Неизвестно';
+  
+  const detailHtml = '<h2>' + escapeHtml(task.title) + '</h2>' +
+    '<div class="task-detail-content">' +
+      '<div class="task-detail-row">' +
+        '<span class="task-detail-label">Статус</span>' +
+        '<span class="task-detail-value">' + statusText + '</span>' +
+      '</div>' +
+      '<div class="task-detail-row">' +
+        '<span class="task-detail-label">Срок выполнения</span>' +
+        '<span class="task-detail-value">' + deadline + '</span>' +
+      '</div>' +
+      '<div class="task-detail-row">' +
+        '<span class="task-detail-label">Создана</span>' +
+        '<span class="task-detail-value">' + createdDate + '</span>' +
+      '</div>' +
+      '<div class="task-detail-row">' +
+        '<span class="task-detail-label">Приоритет</span>' +
+        '<span class="task-detail-value">' + (task.priority || 'Средний') + '</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="task-detail-content">' +
+      '<div class="task-detail-label" style="margin-bottom: 8px;">Описание</div>' +
+      '<div style="color: var(--text-secondary); line-height: 1.6;">' + escapeHtml(task.description || 'Нет описания') + '</div>' +
+    '</div>';
+  
+  document.getElementById('taskDetail').innerHTML = detailHtml;
+  
+  // Show/hide complete button
+  const actionsHtml = isCompleted 
+    ? '<button class="btn-complete-task" disabled>Задача уже завершена</button>'
+    : '<button class="btn-complete-task" onclick="completeTask(' + task.id + ')">Завершить задачу</button>';
+  
+  document.getElementById('taskActions').innerHTML = actionsHtml;
+  
+  showScreen('taskDetailScreen');
+}
+
+// Complete task
+async function completeTask(taskId) {
+  if (!confirm('Вы уверены, что хотите завершить эту задачу?')) {
+    return;
+  }
+  
+  showLoadingOverlay(true);
+  
+  try {
+    const response = await fetch('/api/tasks/' + taskId + '/complete', {
+      method: 'POST'
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      // Update task in list
+      const task = currentTasks.find(t => t.id == taskId);
+      if (task) {
+        task.status = '5';
+      }
+      
+      showSuccess('Задача завершена!', 'Задача успешно закрыта');
+    } else {
+      showToast('Ошибка: ' + (data.error || 'Не удалось завершить задачу'));
+    }
+  } catch (error) {
+    console.error('Error completing task:', error);
+    showToast('Ошибка соединения');
+  } finally {
+    hideLoadingOverlay();
+  }
+}
 // Service Worker for PWA
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(console.error);

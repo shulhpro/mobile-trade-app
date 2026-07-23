@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
@@ -570,6 +570,93 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
       error: 'Failed to create visit',
       message: error.message 
     });
+  }
+});
+
+// Get current user's tasks
+app.get('/api/my-tasks', async (req, res) => {
+  try {
+    const user = await getCurrentUser();
+    
+    const batchData = {
+      halt: 0,
+      calls: [
+        {
+          entity: "tasks",
+          action: "list",
+          params: {
+            FILTER: {
+              RESPONSIBLE_ID: parseInt(user.id),
+              STATUS: [2, 3, 4, 6] // Open, waiting, in progress, deferred
+            },
+            ORDER: { ID: "DESC" },
+            LIMIT: 50
+          }
+        }
+      ]
+    };
+    
+    const response = await fetch(VIBECODE_API + '/batch', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': API_KEY,
+        'Content-Type': 'application/json; charset=utf-8'
+      },
+      body: JSON.stringify(batchData)
+    });
+    
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+    
+    const data = await response.json();
+    const tasks = data.result?.results?.["0"] || [];
+    
+    res.json({ success: true, tasks: tasks });
+  } catch (error) {
+    console.error('Error loading tasks:', error);
+    res.status(500).json({ error: 'Failed to load tasks', message: error.message });
+  }
+});
+
+// Complete task
+app.post('/api/tasks/:id/complete', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    
+    const batchData = {
+      halt: 0,
+      calls: [
+        {
+          entity: "tasks",
+          action: "update",
+          params: {
+            ID: parseInt(taskId),
+            STATUS: 5 // Completed
+          }
+        }
+      ]
+    };
+    
+    const response = await fetch(VIBECODE_API + '/batch', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': API_KEY,
+        'Content-Type': 'application/json; charset=utf-8'
+      },
+      body: JSON.stringify(batchData)
+    });
+    
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+    
+    const data = await response.json();
+    
+    res.json({ success: true, message: 'Task completed' });
+  } catch (error) {
+    console.error('Error completing task:', error);
+    res.status(500).json({ error: 'Failed to complete task', message: error.message });
   }
 });
 app.listen(PORT, () => {
