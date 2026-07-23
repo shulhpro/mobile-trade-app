@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
@@ -8,15 +8,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const VIBECODE_API = 'https://vibecode.bitrix24.tech/v1';
-
-// Fallback API key for server-side API calls (when X-Vibe-Authorization is not available)
-// This is safe because we still filter data by user ID from session
 const FALLBACK_API_KEY = 'vibe_api_B5LhuhAlxAfjnWVLTCD6RU0UsDWl6IvV_05fc97';
 
 app.use(cors());
 app.use(express.json());
 
-// No-cache middleware
 app.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -44,60 +40,48 @@ const db = {
   orders: []
 };
 
-// Parse cookies from request
 function parseCookies(req) {
   const cookies = {};
   const cookieHeader = req.headers.cookie;
   if (cookieHeader) {
     cookieHeader.split(';').forEach(cookie => {
-      const [name, value] = cookie.trim().split('=');
-      if (name && value) {
-        cookies[name] = decodeURIComponent(value);
+      const parts = cookie.trim().split('=');
+      if (parts.length === 2) {
+        cookies[parts[0]] = decodeURIComponent(parts[1]);
       }
     });
   }
   return cookies;
 }
 
-// Get session token from header or cookie
 function getSessionToken(req) {
-  // First check X-Vibe-Authorization header (from Gateway)
   const authHeader = req.headers['x-vibe-authorization'] || req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
     return authHeader.substring(7);
   }
-  
-  // Then check cookie (for AJAX requests)
   const cookies = parseCookies(req);
   if (cookies.vibe_session) {
     return cookies.vibe_session;
   }
-  
   return null;
 }
 
-// Save session token to cookie
 function saveSessionToken(res, token) {
   if (token) {
     res.setHeader('Set-Cookie', 'vibe_session=' + token + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400');
   }
 }
 
-// Get API key for server-side calls
 function getApiKey(req) {
-  // First try X-Api-Key header
   const apiKey = req.headers['x-api-key'];
   if (apiKey) return apiKey;
-  
-  // Fallback to hardcoded key
   return FALLBACK_API_KEY;
 }
 
-// Get current user from VibeCode API using session token
 async function getCurrentUser(req) {
   const token = getSessionToken(req);
   if (!token) {
-    throw new Error('No session token - please authenticate through VibeCode');
+    throw new Error('No session token');
   }
   
   try {
@@ -124,7 +108,6 @@ async function getCurrentUser(req) {
   throw new Error('Failed to get user info');
 }
 
-// Helper to call VibeCode API with API key (server-side)
 async function callVibeApi(req, endpoint) {
   const apiKey = getApiKey(req);
   
@@ -143,11 +126,9 @@ async function callVibeApi(req, endpoint) {
   }
 }
 
-// Auth middleware - require session token for API routes
 function requireAuth(req, res, next) {
   const token = getSessionToken(req);
   
-  // If token from header, save to cookie for future AJAX requests
   const headerToken = req.headers['x-vibe-authorization'];
   if (headerToken && headerToken.startsWith('Bearer ')) {
     saveSessionToken(res, headerToken.substring(7));
@@ -163,16 +144,13 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// Apply auth to API routes
 app.use('/api', requireAuth);
 
-// ============ USER CONTEXT API ============
 app.get('/api/user-context', async (req, res) => {
   try {
     const user = await getCurrentUser(req);
     const apiKey = getApiKey(req);
     
-    // Get workgroups from Bitrix24
     let workgroups = [];
     try {
       const response = await fetch(VIBECODE_API + '/batch', {
@@ -216,7 +194,6 @@ app.get('/api/user-context', async (req, res) => {
   }
 });
 
-// ============ COMPANIES API ============
 app.get('/api/companies', async (req, res) => {
   try {
     console.log('Fetching companies...');
@@ -249,7 +226,6 @@ app.get('/api/companies', async (req, res) => {
   }
 });
 
-// ============ SECTIONS API ============
 app.get('/api/sections', async (req, res) => {
   try {
     const sections = await callVibeApi(req, '/catalog-sections?filter[iblockId]=24&limit=50');
@@ -268,7 +244,6 @@ app.get('/api/sections', async (req, res) => {
   }
 });
 
-// ============ PRODUCTS API ============
 app.get('/api/products', async (req, res) => {
   try {
     const sectionId = req.query.sectionId;
@@ -298,7 +273,6 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// ============ VISIT API ============
 app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   try {
     const user = await getCurrentUser(req);
@@ -312,7 +286,6 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const location = req.body.location ? JSON.parse(req.body.location) : null;
     const orderData = req.body.orderData ? JSON.parse(req.body.orderData) : null;
     
-    // Save uploaded photos
     const photoUrls = [];
     if (req.files && req.files.length > 0) {
       req.files.forEach(file => {
@@ -320,32 +293,29 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
       });
     }
     
-    // Build task description
     let taskDescription = description || '';
     if (noteText) {
       taskDescription += '\n\nNotes: ' + noteText;
     }
     if (location) {
-      taskDescription += `\n\nLocation: ${location.latitude}, ${location.longitude}`;
+      taskDescription += '\n\nLocation: ' + location.latitude + ', ' + location.longitude;
     }
     if (orderData && orderData.items && orderData.items.length > 0) {
       taskDescription += '\n\nOrder:\n';
       orderData.items.forEach(item => {
-        taskDescription += `- ${item.name}: ${item.quantity} x ${item.price}р = ${(item.quantity * item.price).toFixed(2)}р\n`;
+        taskDescription += '- ' + item.name + ': ' + item.quantity + ' x ' + item.price + '? = ' + (item.quantity * item.price).toFixed(2) + '?\n';
       });
-      taskDescription += `\nTotal: ${orderData.total.toFixed(2)}р`;
+      taskDescription += '\nTotal: ' + orderData.total.toFixed(2) + '?';
     }
     
-    // Add photo links to description
     if (photoUrls && photoUrls.length > 0) {
       taskDescription += '\n\n[B]Photos:[/B]\n';
       photoUrls.forEach((url, index) => {
         const fullUrl = req.protocol + '://' + req.get('host') + url;
-        taskDescription += `[URL=${fullUrl}]Photo ${index + 1} - Click to view[/URL]\n`;
+        taskDescription += '[URL=' + fullUrl + ']Photo ' + (index + 1) + ' - Click to view[/URL]\n';
       });
     }
     
-    // Create task in Bitrix24
     const batchData = {
       halt: 0,
       calls: [
@@ -376,13 +346,12 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+      throw new Error('HTTP ' + response.status + ': ' + errorText);
     }
     
     const result = await response.json();
     const taskId = result.data?.results?.["0"]?.id || result.data?.results?.[0]?.id;
     
-    // Save visit to local DB
     const visit = {
       id: Date.now(),
       companyId: companyId,
@@ -415,7 +384,6 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   }
 });
 
-// ============ TASKS API ============
 app.get('/api/my-tasks', async (req, res) => {
   try {
     const user = await getCurrentUser(req);
@@ -456,7 +424,6 @@ app.get('/api/my-tasks', async (req, res) => {
     const data = await response.json();
     const tasks = data.data?.results?.["0"] || [];
     
-    // Double-check: filter only tasks for current user
     const userTasks = tasks.filter(t => t.responsibleId == user.id);
     
     console.log('Loaded tasks:', tasks.length, 'Filtered for user:', userTasks.length);
@@ -468,7 +435,6 @@ app.get('/api/my-tasks', async (req, res) => {
   }
 });
 
-// Complete task
 app.post('/api/tasks/:id/complete', async (req, res) => {
   try {
     const taskId = req.params.id;
@@ -508,7 +474,6 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
   }
 });
 
-// ============ VISITS API (legacy) ============
 app.post('/api/visits', async (req, res) => {
   try {
     const user = await getCurrentUser(req);
