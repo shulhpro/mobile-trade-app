@@ -14,20 +14,18 @@ let isSubmitting = false;
 // Session token management
 let sessionToken = null;
 
-// Get session token from server
-async function initSession() {
-  try {
-    const response = await fetch('/api/session');
-    const data = await response.json();
-    if (data.authenticated && data.token) {
-      sessionToken = data.token;
-      console.log('Session initialized for user:', data.user);
-    } else {
-      console.log('No active session');
+// Get session token from cookie
+function initSession() {
+  const cookies = document.cookie.split(';');
+  for (let cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'vibe_session') {
+      sessionToken = decodeURIComponent(value);
+      console.log('Session token found in cookie');
+      return;
     }
-  } catch (error) {
-    console.error('Error initializing session:', error);
   }
+  console.log('No session token in cookie');
 }
 
 // Helper to make authenticated API calls

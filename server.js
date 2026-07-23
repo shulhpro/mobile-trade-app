@@ -68,7 +68,7 @@ function getSessionToken(req) {
 
 function saveSessionToken(res, token) {
   if (token) {
-    res.setHeader('Set-Cookie', 'vibe_session=' + token + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400');
+    res.setHeader('Set-Cookie', 'vibe_session=' + token + '; Path=/; SameSite=Strict; Max-Age=86400');
   }
 }
 
