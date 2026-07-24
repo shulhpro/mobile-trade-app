@@ -177,4 +177,96 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
   }
 });
 
+// Submit visit - creates task, optionally closes it, adds comment with photos
+app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
+  try {
+    const user = await getCurrentUser();
+    const companyId = req.body.companyId;
+    const subject = req.body.subject || 'Визит';
+    const description = req.body.description || '';
+    const noteText = req.body.noteText || '';
+    const closeVisit = req.body.closeVisit === 'true';
+    const groupId = req.body.groupId || '0';
+    const location = req.body.location ? JSON.parse(req.body.location) : null;
+    const orderData = req.body.orderData ? JSON.parse(req.body.orderData) : null;
+
+    // Build task description
+    let taskDesc = description;
+    if (noteText) {
+      taskDesc += '\n\nЗаметки: ' + noteText;
+    }
+    if (location) {
+      taskDesc += '\n\nМестоположение: ' + (location.address || JSON.stringify(location));
+    }
+    if (orderData && orderData.items && orderData.items.length > 0) {
+      taskDesc += '\n\nЗаказ:\n' + orderData.items.map(i => `- ${i.name}: ${i.quantity} x ${i.price} = ${i.quantity * i.price}`).join('\n');
+      taskDesc += '\n\nИтого: ' + orderData.total;
+    }
+
+    // Create task
+    const createBody = {
+      title: subject,
+      description: taskDesc,
+      responsibleId: user.id,
+      groupId: groupId
+    };
+
+    const createResponse = await fetch(VIBECODE_API + '/tasks', {
+      method: 'POST',
+      headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(createBody)
+    });
+
+    if (!createResponse.ok) throw new Error('Failed to create task');
+    const createData = await createResponse.json();
+    const taskId = createData.data.id;
+
+    // Upload photos
+    const uploadedFiles = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const base64Content = file.buffer.toString('base64');
+        const uploadResponse = await fetch(VIBECODE_API + '/files/upload', {
+          method: 'POST',
+          headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.originalname, content: base64Content })
+        });
+        if (uploadResponse.ok) {
+          const uploadData = await uploadResponse.json();
+          if (uploadData.data) uploadedFiles.push(uploadData.data);
+        }
+      }
+    }
+
+    // Add comment with photos
+    let commentMessage = 'Визит к компании ' + companyId;
+    if (uploadedFiles.length > 0) {
+      const fileLinks = uploadedFiles.map(file =>
+        `[URL=${file.downloadUrl || file.url}]${file.name || file.filename}[/URL]`
+      ).join('\n');
+      commentMessage += '\n\nФото:\n' + fileLinks;
+    }
+
+    await fetch(VIBECODE_API + '/tasks/' + taskId + '/comments', {
+      method: 'POST',
+      headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: commentMessage })
+    });
+
+    // Close task if requested
+    if (closeVisit) {
+      await fetch(VIBECODE_API + '/tasks/' + taskId, {
+        method: 'PATCH',
+        headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: '5' })
+      });
+    }
+
+    res.json({ success: true, taskId: taskId, closed: closeVisit });
+  } catch (error) {
+    console.error('Visit error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.listen(PORT, () => console.log('Server running on port ' + PORT));
