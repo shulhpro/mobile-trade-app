@@ -23,10 +23,12 @@ async function getCurrentUser() {
   return data.data;
 }
 
-// Get user's disk folder ID from VibeCode API
+// Get user's "Created Files" folder ID from VibeCode API
 async function getUserDiskFolderId() {
   try {
     const user = await getCurrentUser();
+    
+    // Get user storage
     const batchBody = {
       calls: [{
         entity: 'storages',
@@ -46,10 +48,38 @@ async function getUserDiskFolderId() {
     });
     const data = await response.json();
     const storages = data.data?.results?.['0'] || [];
-    if (storages.length > 0) {
-      return storages[0].rootFolderId;
+    if (storages.length === 0) return null;
+    
+    const rootFolderId = storages[0].rootFolderId;
+    
+    // Find FOR_CREATED_FILES folder inside root folder
+    const foldersBatch = {
+      calls: [{
+        entity: 'folders',
+        action: 'list',
+        params: {
+          filter: {
+            parentId: rootFolderId
+          }
+        }
+      }]
+    };
+    const foldersResponse = await fetch(VIBECODE_API + '/batch', {
+      method: 'POST',
+      headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(foldersBatch)
+    });
+    const foldersData = await foldersResponse.json();
+    const folders = foldersData.data?.results?.['0'] || [];
+    
+    // Find FOR_CREATED_FILES folder
+    const createdFilesFolder = folders.find(f => f.code === 'FOR_CREATED_FILES');
+    if (createdFilesFolder) {
+      return createdFilesFolder.id;
     }
-    return null;
+    
+    // Fallback to root folder
+    return rootFolderId;
   } catch (error) {
     console.error('Error getting user disk folder:', error);
     return null;
@@ -68,6 +98,20 @@ async function uploadFileToDisk(filename, base64Content, folderId) {
     })
   });
   if (!response.ok) throw new Error('Failed to upload file');
+  const data = await response.json();
+  return data.data;
+}
+
+// Attach files to task via ufTaskWebdavFiles
+async function attachFilesToTask(taskId, fileIds) {
+  const response = await fetch(VIBECODE_API + '/tasks/' + taskId, {
+    method: 'PATCH',
+    headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ufTaskWebdavFiles: fileIds.map(id => 'n' + id)
+    })
+  });
+  if (!response.ok) throw new Error('Failed to attach files to task');
   const data = await response.json();
   return data.data;
 }
@@ -178,8 +222,9 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
     const taskId = req.params.id;
     const text = req.body.text || '';
     const uploadedFiles = [];
+    const fileIds = [];
 
-    // Get user's disk folder ID
+    // Get user's disk folder ID (FOR_CREATED_FILES)
     const folderId = await getUserDiskFolderId();
     if (!folderId) {
       throw new Error('Could not get user disk folder');
@@ -191,7 +236,13 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
         const base64Content = file.buffer.toString('base64');
         const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
         uploadedFiles.push(fileData);
+        fileIds.push(fileData.id);
       }
+    }
+
+    // Attach files to task via ufTaskWebdavFiles
+    if (fileIds.length > 0) {
+      await attachFilesToTask(taskId, fileIds);
     }
 
     let message = text.trim();
@@ -263,21 +314,28 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const createData = await createResponse.json();
     const taskId = createData.data.id;
 
-    // Get user's disk folder ID
+    // Get user's disk folder ID (FOR_CREATED_FILES)
     const folderId = await getUserDiskFolderId();
     
     // Upload photos to VibeCode disk
     const uploadedFiles = [];
+    const fileIds = [];
     if (req.files && req.files.length > 0 && folderId) {
       for (const file of req.files) {
         try {
           const base64Content = file.buffer.toString('base64');
           const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
           uploadedFiles.push(fileData);
+          fileIds.push(fileData.id);
         } catch (uploadError) {
           console.error('Error uploading photo:', uploadError);
         }
       }
+    }
+
+    // Attach photos to task via ufTaskWebdavFiles
+    if (fileIds.length > 0) {
+      await attachFilesToTask(taskId, fileIds);
     }
 
     // Add comment with photos
