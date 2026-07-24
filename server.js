@@ -1,7 +1,6 @@
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
-const path = require('path');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
@@ -13,31 +12,62 @@ const VIBECODE_API = 'https://vibecode.bitrix24.tech/v1';
 app.use(express.json());
 app.use(express.static('public'));
 
-// Serve uploaded files
-app.use('/uploads', express.static('uploads'));
-
-// Ensure uploads directory exists
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
-}
-
-// Configure multer to save files to disk
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
-  }
-});
-const upload = multer({ storage: storage });
+const upload = multer({ storage: multer.memoryStorage() });
 
 async function getCurrentUser() {
   const response = await fetch(VIBECODE_API + '/users/me', {
     headers: { 'X-Api-Key': API_KEY }
   });
   if (!response.ok) throw new Error('Failed to get user');
+  const data = await response.json();
+  return data.data;
+}
+
+// Get user's disk folder ID from VibeCode API
+async function getUserDiskFolderId() {
+  try {
+    const user = await getCurrentUser();
+    const batchBody = {
+      calls: [{
+        entity: 'storages',
+        action: 'list',
+        params: {
+          filter: {
+            entityType: 'user',
+            entityId: user.id
+          }
+        }
+      }]
+    };
+    const response = await fetch(VIBECODE_API + '/batch', {
+      method: 'POST',
+      headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(batchBody)
+    });
+    const data = await response.json();
+    const storages = data.data?.results?.['0'] || [];
+    if (storages.length > 0) {
+      return storages[0].rootFolderId;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting user disk folder:', error);
+    return null;
+  }
+}
+
+// Upload file to VibeCode disk
+async function uploadFileToDisk(filename, base64Content, folderId) {
+  const response = await fetch(VIBECODE_API + '/files/upload', {
+    method: 'POST',
+    headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      filename: filename,
+      content: base64Content,
+      folderId: folderId
+    })
+  });
+  if (!response.ok) throw new Error('Failed to upload file');
   const data = await response.json();
   return data.data;
 }
@@ -149,22 +179,25 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
     const text = req.body.text || '';
     const uploadedFiles = [];
 
-    // Files are saved to disk by multer, generate URLs
+    // Get user's disk folder ID
+    const folderId = await getUserDiskFolderId();
+    if (!folderId) {
+      throw new Error('Could not get user disk folder');
+    }
+
+    // Upload files to VibeCode disk
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const fileUrl = `/uploads/${file.filename}`;
-        uploadedFiles.push({
-          name: file.originalname,
-          url: fileUrl,
-          filename: file.filename
-        });
+        const base64Content = file.buffer.toString('base64');
+        const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
+        uploadedFiles.push(fileData);
       }
     }
 
     let message = text.trim();
     if (uploadedFiles.length > 0) {
       const fileLinks = uploadedFiles.map(file =>
-        `[URL=${file.url}]${file.name}[/URL]`
+        `[URL=${file.downloadUrl || file.url}]${file.name || file.filename}[/URL]`
       ).join('\n');
       message = message ? `${message}\n${fileLinks}` : fileLinks;
     }
@@ -230,16 +263,20 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const createData = await createResponse.json();
     const taskId = createData.data.id;
 
-    // Files are saved to disk by multer, generate URLs
+    // Get user's disk folder ID
+    const folderId = await getUserDiskFolderId();
+    
+    // Upload photos to VibeCode disk
     const uploadedFiles = [];
-    if (req.files && req.files.length > 0) {
+    if (req.files && req.files.length > 0 && folderId) {
       for (const file of req.files) {
-        const fileUrl = `/uploads/${file.filename}`;
-        uploadedFiles.push({
-          name: file.originalname,
-          url: fileUrl,
-          filename: file.filename
-        });
+        try {
+          const base64Content = file.buffer.toString('base64');
+          const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
+          uploadedFiles.push(fileData);
+        } catch (uploadError) {
+          console.error('Error uploading photo:', uploadError);
+        }
       }
     }
 
@@ -247,7 +284,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     let commentMessage = 'Визит к компании ' + companyId;
     if (uploadedFiles.length > 0) {
       const fileLinks = uploadedFiles.map(file =>
-        `[URL=${file.url}]${file.name}[/URL]`
+        `[URL=${file.downloadUrl || file.url}]${file.name || file.filename}[/URL]`
       ).join('\n');
       commentMessage += '\n\nФото:\n' + fileLinks;
     }
