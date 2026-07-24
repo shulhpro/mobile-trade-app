@@ -313,18 +313,34 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const location = req.body.location ? JSON.parse(req.body.location) : null;
     const orderData = req.body.orderData ? JSON.parse(req.body.orderData) : null;
 
-    // Build task description
-    let taskDesc = description;
-    if (noteText) {
-      taskDesc += '\n\nЗаметки: ' + noteText;
-    }
-    if (location) {
-      taskDesc += '\n\nМестоположение: ' + (location.address || JSON.stringify(location));
-    }
-    if (orderData && orderData.items && orderData.items.length > 0) {
-      taskDesc += '\n\nЗаказ:\n' + orderData.items.map(i => `- ${i.name}: ${i.quantity} x ${i.price} = ${i.quantity * i.price}`).join('\n');
-      taskDesc += '\n\nИтого: ' + orderData.total;
-    }
+     
+     // Build task description with emoji icons
+     let taskDesc = '';
+     
+     if (description && description.trim()) {
+       taskDesc += '💬 Комментарий:\n' + description.trim();
+     }
+     
+     if (noteText && noteText.trim()) {
+       if (taskDesc) taskDesc += '\n\n';
+       taskDesc += '📝 Заметки:\n' + noteText.trim();
+     }
+     
+     if (location) {
+       if (taskDesc) taskDesc += '\n\n';
+       const locStr = location.address || (location.lat ? location.lat + ', ' + location.lng : JSON.stringify(location));
+       taskDesc += '📍 Местоположение:\n' + locStr;
+     }
+     
+     if (orderData && orderData.items && orderData.items.length > 0) {
+       if (taskDesc) taskDesc += '\n\n';
+       taskDesc += '📦 Заказ:\n';
+       orderData.items.forEach((item, idx) => {
+         const itemTotal = (item.quantity * item.price).toFixed(2);
+         taskDesc += `${idx + 1}. ${item.name}\n   ${item.quantity} шт × ${item.price} ₽ = ${itemTotal} ₽\n`;
+       });
+       taskDesc += '\n💰 Итого: ' + orderData.total.toFixed(2) + ' ₽';
+     }
 
     // Create task
     const createBody = {
@@ -400,4 +416,5 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
 });
 
 app.listen(PORT, () => console.log('Server running on port ' + PORT));
+
 
