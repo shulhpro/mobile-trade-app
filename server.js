@@ -14,6 +14,16 @@ app.use(express.static('public'));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Health check endpoint for deployment verification
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Explicit root handler to ensure index.html is served
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/public/index.html');
+});
+
 async function getCurrentUser() {
   const response = await fetch(VIBECODE_API + '/users/me', {
     headers: { 'X-Api-Key': API_KEY }
@@ -163,6 +173,7 @@ app.get('/api/companies', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // Get catalog sections
 app.get('/api/sections', async (req, res) => {
   try {
@@ -303,9 +314,6 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
 // Submit visit - creates task, optionally closes it, adds comment with photos
 app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   try {
-    console.log('=== VISIT START ===');
-    console.log('closeVisit body:', req.body.closeVisit);
-    console.log('Files received:', req.files ? req.files.length : 0);
     const user = await getCurrentUser();
     const companyId = req.body.companyId;
     const subject = req.body.subject || 'Визит';
@@ -349,7 +357,6 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
 
     // Get user's disk folder ID (FOR_CREATED_FILES)
     const folderId = await getUserDiskFolderId();
-    console.log('FolderId result:', folderId);
     if (!folderId) {
       throw new Error('Could not get user disk folder');
     }
@@ -359,27 +366,16 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const fileIds = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        try {
-          const base64Content = file.buffer.toString('base64');
-          console.log('Uploading:', file.originalname);
-          const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
-          console.log('Uploaded OK:', fileData.id);
-          uploadedFiles.push(fileData);
-          fileIds.push(fileData.id);
-        } catch (uploadErr) {
-          console.error('Upload failed:', uploadErr.message);
-        }
+        const base64Content = file.buffer.toString('base64');
+        const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
+        uploadedFiles.push(fileData);
+        fileIds.push(fileData.id);
       }
     }
 
     // Attach photos to task via ufTaskWebdavFiles
     if (fileIds.length > 0) {
-      try {
-        await attachFilesToTask(taskId, fileIds);
-        console.log('Files attached OK');
-      } catch (attachErr) {
-        console.error('Attach failed:', attachErr.message);
-      }
+      await attachFilesToTask(taskId, fileIds);
     }
 
     // Add comment with photos
@@ -399,23 +395,18 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
 
     // Close task if requested
     if (closeVisit) {
-      console.log('Closing task...');
       await fetch(VIBECODE_API + '/tasks/' + taskId, {
         method: 'PATCH',
         headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: '5' })
       });
-      console.log('Task closed');
     }
 
     res.json({ success: true, taskId: taskId, closed: closeVisit });
   } catch (error) {
     console.error('Visit error:', error);
-    console.error('Visit error stack:', error.stack);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 app.listen(PORT, () => console.log('Server running on port ' + PORT));
-
-
