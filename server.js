@@ -346,20 +346,19 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
 
     // Get user's disk folder ID (FOR_CREATED_FILES)
     const folderId = await getUserDiskFolderId();
+    if (!folderId) {
+      throw new Error('Could not get user disk folder');
+    }
     
     // Upload photos to VibeCode disk
     const uploadedFiles = [];
     const fileIds = [];
-    if (req.files && req.files.length > 0 && folderId) {
+    if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        try {
-          const base64Content = file.buffer.toString('base64');
-          const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
-          uploadedFiles.push(fileData);
-          fileIds.push(fileData.id);
-        } catch (uploadError) {
-          console.error('Error uploading photo:', uploadError);
-        }
+        const base64Content = file.buffer.toString('base64');
+        const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
+        uploadedFiles.push(fileData);
+        fileIds.push(fileData.id);
       }
     }
 
