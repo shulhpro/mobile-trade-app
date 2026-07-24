@@ -163,6 +163,36 @@ app.get('/api/companies', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Get catalog sections
+app.get('/api/sections', async (req, res) => {
+  try {
+    const response = await fetch(VIBECODE_API + '/catalog-sections?filter[iblockId]=24&limit=50', {
+      headers: { 'X-Api-Key': API_KEY }
+    });
+    const data = await response.json();
+    res.json({ result: data.data || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get products by section
+app.get('/api/products', async (req, res) => {
+  try {
+    const sectionId = req.query.sectionId;
+    let url = VIBECODE_API + '/products?limit=100&filter[active]=Y';
+    if (sectionId) {
+      url += '&filter[sectionId]=' + sectionId;
+    }
+    const response = await fetch(url, {
+      headers: { 'X-Api-Key': API_KEY }
+    });
+    const data = await response.json();
+    res.json({ result: data.data || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.get('/api/tasks', async (req, res) => {
   try {
@@ -370,3 +400,4 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
 });
 
 app.listen(PORT, () => console.log('Server running on port ' + PORT));
+
