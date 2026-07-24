@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
+const path = require('path');
 const fetch = require('node-fetch');
 require('dotenv').config();
 
@@ -12,7 +13,25 @@ const VIBECODE_API = 'https://vibecode.bitrix24.tech/v1';
 app.use(express.json());
 app.use(express.static('public'));
 
-const upload = multer({ storage: multer.memoryStorage() });
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
+
+// Ensure uploads directory exists
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
+
+// Configure multer to save files to disk
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage: storage });
 
 async function getCurrentUser() {
   const response = await fetch(VIBECODE_API + '/users/me', {
@@ -130,32 +149,22 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
     const text = req.body.text || '';
     const uploadedFiles = [];
 
+    // Files are saved to disk by multer, generate URLs
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const base64Content = file.buffer.toString('base64');
-        const uploadResponse = await fetch(VIBECODE_API + '/files/upload', {
-          method: 'POST',
-          headers: {
-            'X-Api-Key': API_KEY,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            filename: file.originalname,
-            content: base64Content
-          })
+        const fileUrl = `/uploads/${file.filename}`;
+        uploadedFiles.push({
+          name: file.originalname,
+          url: fileUrl,
+          filename: file.filename
         });
-        if (!uploadResponse.ok) throw new Error(`Failed to upload file: ${file.originalname}`);
-        const uploadData = await uploadResponse.json();
-        if (uploadData.data) {
-          uploadedFiles.push(uploadData.data);
-        }
       }
     }
 
     let message = text.trim();
     if (uploadedFiles.length > 0) {
       const fileLinks = uploadedFiles.map(file =>
-        `[URL=${file.downloadUrl || file.url}]${file.name || file.filename}[/URL]`
+        `[URL=${file.url}]${file.name}[/URL]`
       ).join('\n');
       message = message ? `${message}\n${fileLinks}` : fileLinks;
     }
@@ -221,20 +230,16 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const createData = await createResponse.json();
     const taskId = createData.data.id;
 
-    // Upload photos
+    // Files are saved to disk by multer, generate URLs
     const uploadedFiles = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const base64Content = file.buffer.toString('base64');
-        const uploadResponse = await fetch(VIBECODE_API + '/files/upload', {
-          method: 'POST',
-          headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.originalname, content: base64Content })
+        const fileUrl = `/uploads/${file.filename}`;
+        uploadedFiles.push({
+          name: file.originalname,
+          url: fileUrl,
+          filename: file.filename
         });
-        if (uploadResponse.ok) {
-          const uploadData = await uploadResponse.json();
-          if (uploadData.data) uploadedFiles.push(uploadData.data);
-        }
       }
     }
 
@@ -242,7 +247,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     let commentMessage = 'Визит к компании ' + companyId;
     if (uploadedFiles.length > 0) {
       const fileLinks = uploadedFiles.map(file =>
-        `[URL=${file.downloadUrl || file.url}]${file.name || file.filename}[/URL]`
+        `[URL=${file.url}]${file.name}[/URL]`
       ).join('\n');
       commentMessage += '\n\nФото:\n' + fileLinks;
     }
