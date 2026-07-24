@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=43">
+  <link rel="stylesheet" href="css/style.css?v=35">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -92,8 +92,29 @@
       <!-- Task Detail Screen -->
       <section id="taskDetailScreen" class="screen">
         <button class="btn-back" onclick="showScreen('tasksScreen')">&lt; Назад к задачам</button>
-        <div class="task-detail" id="taskDetail"></div>
-        <div class="task-actions" id="taskActions"></div>
+        <div class="task-detail-scroll">
+          <div class="task-detail" id="taskDetail"></div>
+          
+          <!-- Comment Section -->
+          <div class="task-comment-section" id="taskCommentSection" style="display: none;">
+            <div class="form-section">
+              <h3>💬 Комментарий</h3>
+              <textarea id="taskCommentText" rows="3" placeholder="Введите комментарий..."></textarea>
+            </div>
+            
+            <!-- File Upload -->
+            <div class="form-section">
+              <h3>📎 Файлы</h3>
+              <input type="file" id="taskFileInput" multiple>
+              <div id="taskFilePreview" class="file-preview"></div>
+            </div>
+            
+            <button class="btn-save-comment" onclick="addCommentWithFiles()">Отправить комментарий</button>
+          </div>
+        </div>
+        
+        <!-- Bottom Complete Button -->
+        <div class="task-complete-bottom" id="taskCompleteBottom"></div>
       </section>
 
       <!-- Unified Visit Form -->
@@ -185,6 +206,9 @@
         <div class="loading-text">Сохранение визита...</div>
       </div>
     </div>
-  <script src="js/app.js?v=42"></script>
+  <script src="js/app.js?v=34"></script>
 </body>
 </html>
+
+
+
