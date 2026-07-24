@@ -427,10 +427,6 @@ async function submitVisit(closeVisit) {
   isSubmitting = true;
   showLoadingOverlay(closeVisit);
   
-  console.log('=== SUBMIT VISIT ===');
-  console.log('visitPhotos count:', visitPhotos.length);
-  console.log('visitPhotos:', visitPhotos.map(f => f.name));
-  
   const formData = new FormData();
   formData.append('companyId', currentCompany.id || currentCompany.ID);
   formData.append('subject', 'Визит к ' + (currentCompany.title || currentCompany.TITLE));
@@ -466,7 +462,6 @@ async function submitVisit(closeVisit) {
   
   // Add photos
   visitPhotos.forEach(file => {
-    console.log('Adding photo to FormData:', file.name, file.size);
     formData.append('photos', file);
   });
   
@@ -482,7 +477,6 @@ async function submitVisit(closeVisit) {
     });
     
     const data = await response.json();
-    console.log('Visit response:', data);
     if (data.success) {
       if (closeVisit) {
         showSuccess('Визит завершен!', 'Задача закрыта. Все данные сохранены.');
