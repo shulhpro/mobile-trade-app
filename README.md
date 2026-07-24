@@ -1,4 +1,4 @@
-﻿# 🏭 Мобильная торговля
+# 🏭 Мобильная торговля
 
 [![PWA](https://img.shields.io/badge/PWA-Ready-blueviolet?logo=pwa)](https://app-116f18205548.vibecode.bitrix24.tech)
 [![Bitrix24](https://img.shields.io/badge/Bitrix24-Integrated-00aeef?logo=bitrix24)](https://www.bitrix24.ru/)
