@@ -13,6 +13,12 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const upload = multer({ storage: multer.memoryStorage() });
+ 
+ // Log all requests
+ app.use((req, res, next) => {
+   console.log('Request:', req.method, req.path, 'Content-Type:', req.headers['content-type']);
+   next();
+ });
 
 // Health check endpoint for deployment verification
 app.get('/health', (req, res) => {
@@ -260,6 +266,9 @@ app.post('/api/tasks/:id/complete', async (req, res) => {
 
 app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) => {
   try {
+    console.log('=== TASK COMMENT ===');
+    console.log('Files count:', req.files ? req.files.length : 0);
+    console.log('Body keys:', Object.keys(req.body));
     const taskId = req.params.id;
     const text = req.body.text || '';
     const uploadedFiles = [];
@@ -267,6 +276,7 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
 
     // Get user's disk folder ID (FOR_CREATED_FILES)
     const folderId = await getUserDiskFolderId();
+    console.log('FolderId:', folderId);
     if (!folderId) {
       throw new Error('Could not get user disk folder');
     }
@@ -274,8 +284,10 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
     // Upload files to VibeCode disk
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
+        console.log('Uploading file:', file.originalname, file.size);
         const base64Content = file.buffer.toString('base64');
         const fileData = await uploadFileToDisk(file.originalname, base64Content, folderId);
+        console.log('File uploaded:', fileData.id);
         uploadedFiles.push(fileData);
         fileIds.push(fileData.id);
       }
@@ -283,7 +295,9 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
 
     // Attach files to task via ufTaskWebdavFiles
     if (fileIds.length > 0) {
+      console.log('Attaching files:', fileIds);
       await attachFilesToTask(taskId, fileIds);
+      console.log('Files attached');
     }
 
     let message = text.trim();
