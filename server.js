@@ -104,6 +104,7 @@ async function getUserDiskFolderId() {
 
 // Upload file to VibeCode disk
 async function uploadFileToDisk(filename, base64Content, folderId) {
+  console.log('Uploading file:', filename, 'size:', base64Content.length, 'folderId:', folderId);
   const response = await fetch(VIBECODE_API + '/files/upload', {
     method: 'POST',
     headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
@@ -113,8 +114,13 @@ async function uploadFileToDisk(filename, base64Content, folderId) {
       folderId: folderId
     })
   });
-  if (!response.ok) throw new Error('Failed to upload file');
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Upload failed:', response.status, errorText);
+    throw new Error('Failed to upload file: ' + response.status + ' ' + errorText);
+  }
   const data = await response.json();
+  console.log('Upload success:', data.data.id);
   return data.data;
 }
 
