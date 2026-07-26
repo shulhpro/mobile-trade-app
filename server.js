@@ -105,11 +105,14 @@ async function getUserDiskFolderId() {
 // Upload file to VibeCode disk
 async function uploadFileToDisk(filename, base64Content, folderId) {
   console.log('Uploading file:', filename, 'size:', base64Content.length, 'folderId:', folderId);
+  // Add timestamp to filename to avoid duplicates (DISK_OBJ_22000 error)
+  const timestamp = Date.now();
+  const uniqueFilename = timestamp + '_' + filename;
   const response = await fetch(VIBECODE_API + '/files/upload', {
     method: 'POST',
     headers: { 'X-Api-Key': API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      filename: filename,
+      filename: uniqueFilename,
       content: base64Content,
       folderId: folderId
     })
