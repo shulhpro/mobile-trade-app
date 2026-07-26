@@ -454,7 +454,7 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
     const fileIds = [];
 
     // Get user's disk folder ID (FOR_CREATED_FILES)
-    const folderId = await getUserDiskFolderId();
+    const folderId = await getUserDiskFolderId(req);
     console.log('FolderId:', folderId);
     if (!folderId) {
       throw new Error('Could not get user disk folder');
@@ -549,7 +549,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     const taskId = createData.data.id;
 
     // Get user's disk folder ID (FOR_CREATED_FILES)
-    const folderId = await getUserDiskFolderId();
+    const folderId = await getUserDiskFolderId(req);
     if (!folderId) {
       throw new Error('Could not get user disk folder');
     }
