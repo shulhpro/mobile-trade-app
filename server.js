@@ -15,14 +15,36 @@ app.use(express.static('public'));
 const upload = multer({ storage: multer.memoryStorage() });
  
  // Log all requests
- app.use((req, res, next) => {
-   console.log('Request:', req.method, req.path, 'Content-Type:', req.headers['content-type']);
-   next();
- });
+app.use((req, res, next) => {
+  console.log('Request:', req.method, req.path, 'Content-Type:', req.headers['content-type']);
+  // Log auth headers for debugging
+  if (req.headers['x-vibe-authorization']) {
+    console.log('X-Vibe-Authorization:', req.headers['x-vibe-authorization'].substring(0, 50) + '...');
+  }
+  if (req.headers['authorization']) {
+    console.log('Authorization:', req.headers['authorization'].substring(0, 50) + '...');
+  }
+  next();
+});
 
 // Health check endpoint for deployment verification
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Auth status endpoint
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const user = await getCurrentUser();
+    res.json({
+      success: true,
+      user: user,
+      authType: 'personal_key',
+      note: 'This app uses a personal API key. All operations are performed on behalf of the key owner.'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Explicit root handler to ensure index.html is served
