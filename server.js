@@ -313,7 +313,7 @@ async function attachFilesToTask(taskId, fileIds) {
 
 app.get('/api/session', async (req, res) => {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
     res.json({ success: true, user });
   } catch (error) {
     res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -322,7 +322,7 @@ app.get('/api/session', async (req, res) => {
 
 app.get('/api/user-context', async (req, res) => {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
     const batchData = {
       halt: 0,
       cmd: {
@@ -348,7 +348,7 @@ app.get('/api/user-context', async (req, res) => {
 
 app.get('/api/companies', async (req, res) => {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
     const response = await fetch(VIBECODE_API + '/companies?limit=100&select=id,title,phone,email,address', {
       headers: { 'X-Api-Key': API_KEY }
     });
@@ -507,7 +507,7 @@ app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) =>
 // Submit visit - creates task, optionally closes it, adds comment with photos
 app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
     const companyId = req.body.companyId;
     const subject = req.body.subject || 'Визит';
     const description = req.body.description || '';
