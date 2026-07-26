@@ -7,10 +7,27 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.VIBECODE_API_KEY;
+const APP_KEY = process.env.VIBECODE_APP_KEY; // OAuth app key for multi-user auth
 const VIBECODE_API = 'https://vibecode.bitrix24.tech/v1';
+const APP_URL = process.env.APP_URL || 'https://app-116f18205548.vibecode.bitrix24.tech';
 
 app.use(express.json());
 app.use(express.static('public'));
+ 
+ // Parse cookies manually
+ app.use((req, res, next) => {
+   req.cookies = {};
+   const cookieHeader = req.headers.cookie;
+   if (cookieHeader) {
+     cookieHeader.split(';').forEach(cookie => {
+       const [name, value] = cookie.trim().split('=');
+       if (name && value) {
+         req.cookies[name] = decodeURIComponent(value);
+       }
+     });
+   }
+   next();
+ });
 
 const upload = multer({ storage: multer.memoryStorage() });
  
@@ -32,15 +49,109 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Auth status endpoint
-app.get('/api/auth/me', async (req, res) => {
+// OAuth Login - redirect to VibeCode authorization
+app.get('/api/auth/login', (req, res) => {
+  const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  const redirectUri = APP_URL + '/api/auth/callback';
+  const authUrl = `https://vibecode.bitrix24.tech/v1/oauth/authorize?app_key=${APP_KEY}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+  
+  // Store state in cookie for verification
+  res.setHeader('Set-Cookie', `oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`);
+  res.redirect(authUrl);
+});
+
+// OAuth Callback - exchange code for session token
+app.get('/api/auth/callback', async (req, res) => {
   try {
-    const user = await getCurrentUser();
+    const { code, state } = req.query;
+    const storedState = req.cookies.oauth_state;
+    
+    // Verify state to prevent CSRF
+    if (!state || state !== storedState) {
+      return res.status(400).json({ success: false, error: 'Invalid state parameter' });
+    }
+    
+    if (!code) {
+      return res.status(400).json({ success: false, error: 'No authorization code received' });
+    }
+    
+    // Exchange code for session token
+    const tokenResponse = await fetch(VIBECODE_API + '/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        app_key: APP_KEY,
+        code: code,
+        redirect_uri: APP_URL + '/api/auth/callback'
+      })
+    });
+    
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.text();
+      console.error('Token exchange failed:', errorData);
+      return res.status(400).json({ success: false, error: 'Failed to exchange code for token' });
+    }
+    
+    const tokenData = await tokenResponse.json();
+    const sessionToken = tokenData.access_token;
+    
+    // Store session token in httpOnly cookie
+    res.setHeader('Set-Cookie', [
+      `vibe_session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
+      `oauth_state=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+    ]);
+    
+    // Redirect to app
+    res.redirect('/');
+  } catch (error) {
+    console.error('Auth callback error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Logout - clear session
+app.get('/api/auth/logout', (req, res) => {
+  res.setHeader('Set-Cookie', `vibe_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  res.json({ success: true, message: 'Logged out' });
+});
+
+// Get current auth status
+app.get('/api/auth/status', async (req, res) => {
+  try {
+    const sessionToken = req.cookies.vibe_session || getUserSession(req);
+    
+    if (!sessionToken) {
+      return res.json({ 
+        authenticated: false,
+        loginUrl: '/api/auth/login'
+      });
+    }
+    
+    // Verify session by calling /me
+    const meResponse = await fetch(VIBECODE_API + '/me', {
+      headers: {
+        'X-Api-Key': APP_KEY,
+        'Authorization': 'Bearer ' + sessionToken
+      }
+    });
+    
+    if (!meResponse.ok) {
+      return res.json({ 
+        authenticated: false,
+        loginUrl: '/api/auth/login',
+        error: 'Session expired'
+      });
+    }
+    
+    const meData = await meResponse.json();
+    
     res.json({
-      success: true,
-      user: user,
-      authType: 'personal_key',
-      note: 'This app uses a personal API key. All operations are performed on behalf of the key owner.'
+      authenticated: true,
+      user: {
+        id: meData.data.currentUser?.bitrixUserId || meData.data.owner?.userId,
+        name: meData.data.owner?.name,
+        portal: meData.data.portal
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -52,19 +163,56 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/public/index.html');
 });
 
-async function getCurrentUser() {
-  const response = await fetch(VIBECODE_API + '/users/me', {
-    headers: { 'X-Api-Key': API_KEY }
-  });
-  if (!response.ok) throw new Error('Failed to get user');
-  const data = await response.json();
-  return data.data;
+// Get user session from X-Vibe-Authorization header (injected by Black Hole Gateway)
+function getUserSession(req) {
+  const vibeAuth = req.headers['x-vibe-authorization'];
+  if (!vibeAuth) {
+    // Fallback to cookie
+    return req.cookies.vibe_session || null;
+  }
+  if (vibeAuth && vibeAuth.startsWith('Bearer ')) {
+    return vibeAuth.substring(7); // Remove 'Bearer ' prefix
+  }
+  return null;
+}
+
+// Get current user from OAuth session (for multi-user apps)
+async function getCurrentUser(req) {
+  const sessionToken = getUserSession(req);
+  
+  if (sessionToken && APP_KEY) {
+    // Multi-user mode: use OAuth session
+    const response = await fetch(VIBECODE_API + '/me', {
+      headers: { 
+        'X-Api-Key': APP_KEY,
+        'Authorization': 'Bearer ' + sessionToken
+      }
+    });
+    if (!response.ok) throw new Error('Failed to get user from session');
+    const data = await response.json();
+    // Return user with bitrixUserId from OAuth session
+    return {
+      id: data.data.currentUser?.bitrixUserId || data.data.owner?.userId,
+      name: data.data.owner?.name || 'User',
+      ...data.data.currentUser
+    };
+  } else if (API_KEY) {
+    // Fallback: use personal API key (single-user mode)
+    const response = await fetch(VIBECODE_API + '/users/me', {
+      headers: { 'X-Api-Key': API_KEY }
+    });
+    if (!response.ok) throw new Error('Failed to get user');
+    const data = await response.json();
+    return data.data;
+  } else {
+    throw new Error('No authentication available');
+  }
 }
 
 // Get user's "Created Files" folder ID from VibeCode API
-async function getUserDiskFolderId() {
+async function getUserDiskFolderId(req) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(req);
     
     // Get user storage
     const batchBody = {
@@ -88,7 +236,7 @@ async function getUserDiskFolderId() {
     const storages = data.data?.results?.['0'] || [];
     if (storages.length === 0) return null;
     
-    const rootFolderId = storages[0].rootFolderId;
+    const rootFolderId = storages[0].rootFolderId || storages[0].id;
     
     // Find FOR_CREATED_FILES folder inside root folder
     const foldersBatch = {
