@@ -1,0 +1,129 @@
+// Auth module for Mobile Trade App
+// Handles OAuth authentication via VibeCode
+
+const AUTH_TOKEN_KEY = 'mt_auth_token';
+const AUTH_EXPIRES_KEY = 'mt_auth_expires';
+
+// Get stored auth token
+function getAuthToken() {
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+// Check if user is authenticated
+function isAuthenticated() {
+  const token = getAuthToken();
+  const expires = localStorage.getItem(AUTH_EXPIRES_KEY);
+  if (!token) return false;
+  if (expires && new Date(expires) < new Date()) {
+    // Token expired
+    clearAuth();
+    return false;
+  }
+  return true;
+}
+
+// Clear auth data
+function clearAuth() {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_EXPIRES_KEY);
+}
+
+// Store auth token
+function setAuthToken(token, expiresIn = 86400) {
+  localStorage.setItem(AUTH_TOKEN_KEY, token);
+  const expires = new Date(Date.now() + expiresIn * 1000);
+  localStorage.setItem(AUTH_EXPIRES_KEY, expires.toISOString());
+}
+
+// Fetch with auth header
+async function fetchWithAuth(url, options = {}) {
+  const token = getAuthToken();
+  if (token) {
+    options.headers = options.headers || {};
+    options.headers['Authorization'] = 'Bearer ' + token;
+  }
+  return fetch(url, options);
+}
+
+// Check auth status on app load
+async function checkAuth() {
+  try {
+    const response = await fetchWithAuth('/api/auth/status');
+    const data = await response.json();
+    
+    if (data.authenticated) {
+      console.log('User authenticated');
+      return true;
+    } else {
+      console.log('User not authenticated, showing login');
+      showLoginScreen();
+      return false;
+    }
+  } catch (error) {
+    console.error('Auth check failed:', error);
+    showLoginScreen();
+    return false;
+  }
+}
+
+// Show login screen
+function showLoginScreen() {
+  const app = document.getElementById('app');
+  if (!app) return;
+  
+  app.innerHTML = `
+    <div class="login-screen">
+      <div class="login-container">
+        <h1>🏭 Мобильная торговля</h1>
+        <p>Войдите через Битрикс24 для доступа к приложению</p>
+        <button class="btn-login" onclick="startOAuth()">
+          Войти через Битрикс24
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// Start OAuth flow
+function startOAuth() {
+  // Redirect to OAuth login
+  window.location.href = '/api/auth/login';
+}
+
+// Handle OAuth callback
+async function handleOAuthCallback() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
+  const error = urlParams.get('error');
+  
+  if (error) {
+    console.error('OAuth error:', error);
+    alert('Ошибка авторизации: ' + error);
+    showLoginScreen();
+    return;
+  }
+  
+  if (token) {
+    setAuthToken(token);
+    // Remove token from URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+    // Reload app
+    window.location.reload();
+  }
+}
+
+// Logout
+function logout() {
+  clearAuth();
+  window.location.href = '/api/auth/logout';
+}
+
+// Initialize auth on page load
+document.addEventListener('DOMContentLoaded', function() {
+  // Check if this is OAuth callback
+  if (window.location.search.includes('token=') || window.location.search.includes('error=')) {
+    handleOAuthCallback();
+  } else {
+    checkAuth();
+  }
+});
