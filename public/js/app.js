@@ -55,7 +55,7 @@ if (document.readyState === 'loading') {
 // Load user context (info + workgroups + department head)
 async function loadUserContext() {
   try {
-    const response = await fetch('/api/user-context');
+    const response = await fetchWithAuth('/api/user-context');
     const data = await response.json();
     userContext = data;
     
@@ -113,7 +113,7 @@ function renderProjectSelector(workgroups) {
 // Load companies
 async function loadCompanies() {
   try {
-    const response = await fetch('/api/companies');
+    const response = await fetchWithAuth('/api/companies');
     const data = await response.json();
     companies = data.result || [];
     renderCompanies(companies);
@@ -153,7 +153,7 @@ async function selectCompany(companyId) {
   
   // Check for existing task
   try {
-    const response = await fetch('/api/tasks/' + (currentCompany.id || currentCompany.ID));
+    const response = await fetchWithAuth('/api/tasks/' + (currentCompany.id || currentCompany.ID));
     const data = await response.json();
     currentTask = data.task;
   } catch (error) {
@@ -292,7 +292,7 @@ async function loadProductsForOrder() {
 
 async function loadSections() {
   try {
-    const response = await fetch('/api/sections');
+    const response = await fetchWithAuth('/api/sections');
     const data = await response.json();
     sections = data.result || [];
     renderSections();
@@ -328,7 +328,7 @@ async function loadProductsBySection(sectionId) {
   currentSectionId = sectionId;
   
   try {
-    const response = await fetch('/api/products?sectionId=' + sectionId);
+    const response = await fetchWithAuth('/api/products?sectionId=' + sectionId);
     const data = await response.json();
     products = data.result || [];
     renderProducts();
@@ -476,7 +476,7 @@ async function submitVisit(closeVisit) {
   }
   
   try {
-    const response = await fetch('/api/visit', {
+    const response = await fetchWithAuth('/api/visit', {
       method: 'POST',
       body: formData
     });
@@ -552,7 +552,7 @@ async function loadTasks() {
   container.innerHTML = '<div class="loading">Загрузка задач...</div>';
   
   try {
-    const response = await fetch('/api/my-tasks');
+    const response = await fetchWithAuth('/api/my-tasks');
     const data = await response.json();
     currentTasks = data.tasks || [];
     renderTasks();
@@ -713,7 +713,7 @@ async function addCommentWithFiles() {
       formData.append('files', file);
     });
     
-    const response = await fetch('/api/tasks/' + taskId + '/comment', {
+    const response = await fetchWithAuth('/api/tasks/' + taskId + '/comment', {
       method: 'POST',
       body: formData
     });
@@ -750,7 +750,7 @@ async function completeTaskWithComment(taskId) {
     // Send comment first if exists
     if (commentText) {
       try {
-        await fetch('/api/tasks/' + taskId + '/comment', {
+        await fetchWithAuth('/api/tasks/' + taskId + '/comment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: commentText })
@@ -761,7 +761,7 @@ async function completeTaskWithComment(taskId) {
     }
     
     // Complete task
-    const response = await fetch('/api/tasks/' + taskId + '/complete', {
+    const response = await fetchWithAuth('/api/tasks/' + taskId + '/complete', {
       method: 'POST'
     });
     
@@ -794,7 +794,7 @@ async function completeTask(taskId) {
   showLoadingOverlay(true);
   
   try {
-    const response = await fetch('/api/tasks/' + taskId + '/complete', {
+    const response = await fetchWithAuth('/api/tasks/' + taskId + '/complete', {
       method: 'POST'
     });
     
@@ -821,6 +821,7 @@ async function completeTask(taskId) {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(console.error);
 }
+
 
 
 
