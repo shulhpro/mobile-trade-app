@@ -102,7 +102,7 @@ app.get('/api/auth/callback', async (req, res) => {
     ]);
     
     // Redirect to app
-    res.redirect('/');
+    res.redirect('/?token=' + sessionToken);
   } catch (error) {
     console.error('Auth callback error:', error);
     res.status(500).json({ success: false, error: error.message });
