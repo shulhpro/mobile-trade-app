@@ -118,7 +118,7 @@ app.get('/api/auth/logout', (req, res) => {
 // Get current auth status
 app.get('/api/auth/status', async (req, res) => {
   try {
-    const sessionToken = req.cookies.vibe_session || getUserSession(req);
+    const sessionToken = getUserSession(req);
     
     if (!sessionToken) {
       return res.json({ 
@@ -165,7 +165,9 @@ app.get('/', (req, res) => {
 
 // Get user session from X-Vibe-Authorization header (injected by Black Hole Gateway)
 function getUserSession(req) {
-  const vibeAuth = req.headers['x-vibe-authorization'];
+  // Check for X-Vibe-Authorization header (from Gateway when user is authenticated via Bitrix24)
+  // or Authorization header (from manual API calls)
+  const vibeAuth = req.headers['x-vibe-authorization'] || req.headers['authorization'];
   if (!vibeAuth) {
     // Fallback to cookie
     return req.cookies.vibe_session || null;
@@ -603,3 +605,4 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
 });
 
 app.listen(PORT, () => console.log('Server running on port ' + PORT));
+
