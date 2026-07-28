@@ -1,4 +1,32 @@
-﻿node_modules/
-version/
+﻿# Dependencies
+node_modules/
+
+# Environment
 .env
+
+# Uploads
+uploads/
+
+# Temp
+temp/
+git/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backups
+*.bak
+*.backup
+server.js.backup
+
+# VibeCode storage (large)
+vibecode-storage-download/
+vibecode-backup-repo/
