@@ -11,40 +11,6 @@ let selectedProjectId = null;
 let sections = [];
 let currentSectionId = null;
 let isSubmitting = false;
-// Session token management
-let sessionToken = null;
-
-// Get session token from cookie
-function initSession() {
-  const cookies = document.cookie.split(';');
-  for (let cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'vibe_session') {
-      sessionToken = decodeURIComponent(value);
-      console.log('Session token found in cookie');
-      return;
-    }
-  }
-  console.log('No session token in cookie');
-}
-
-// Helper to make authenticated API calls
-async function apiFetch(url, options = {}) {
-  const headers = options.headers || {};
-  
-  // Add session token if available
-  if (sessionToken) {
-    headers['X-Vibe-Authorization'] = 'Bearer ' + sessionToken;
-  }
-  
-  const response = await fetch(url, {
-    ...options,
-    headers: headers
-  });
-  
-  return response;
-}
-
 
 // Clear cache and reload app
 async function clearCacheAndReload() {
@@ -630,10 +596,17 @@ function filterTasks(filter) {
   renderTasks();
 }
 
+// Current task ID for comment operations
+let currentTaskIdForComment = null;
+let taskCommentFiles = [];
+
 // Show task detail
 function showTaskDetail(taskId) {
   const task = currentTasks.find(t => t.id == taskId);
   if (!task) return;
+  
+  currentTaskIdForComment = taskId;
+  taskCommentFiles = [];
   
   const isCompleted = task.status === '5' || task.status === 'completed';
   const statusText = isCompleted ? 'Завершена' : 'Открыта';
@@ -666,17 +639,142 @@ function showTaskDetail(taskId) {
   
   document.getElementById('taskDetail').innerHTML = detailHtml;
   
-  // Show/hide complete button
-  const actionsHtml = isCompleted 
-    ? '<button class="btn-complete-task" disabled>Задача уже завершена</button>'
-    : '<button class="btn-complete-task" onclick="completeTask(' + task.id + ')">Завершить задачу</button>';
+  // Show/hide comment section
+  const commentSection = document.getElementById('taskCommentSection');
+  if (isCompleted) {
+    commentSection.style.display = 'none';
+  } else {
+    commentSection.style.display = 'block';
+    // Reset form
+    document.getElementById('taskCommentText').value = '';
+    document.getElementById('taskFileInput').value = '';
+    document.getElementById('taskFilePreview').innerHTML = '';
+  }
   
-  document.getElementById('taskActions').innerHTML = actionsHtml;
+  // Bottom complete button
+  const bottomHtml = isCompleted 
+    ? '<button class="btn-complete-task" disabled>Задача уже завершена</button>'
+    : '<button class="btn-complete-task" onclick="completeTaskWithComment(' + task.id + ')">Завершить задачу</button>';
+  
+  document.getElementById('taskCompleteBottom').innerHTML = bottomHtml;
   
   showScreen('taskDetailScreen');
 }
 
-// Complete task
+// Handle file selection for task comment
+document.addEventListener('DOMContentLoaded', () => {
+  const fileInput = document.getElementById('taskFileInput');
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const files = e.target.files;
+      const preview = document.getElementById('taskFilePreview');
+      preview.innerHTML = '';
+      taskCommentFiles = [];
+      
+      Array.from(files).forEach(file => {
+        taskCommentFiles.push(file);
+        const fileDiv = document.createElement('div');
+        fileDiv.className = 'file-item';
+        fileDiv.textContent = '📎 ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+        preview.appendChild(fileDiv);
+      });
+    });
+  }
+});
+
+// Add comment with files to task
+async function addCommentWithFiles() {
+  const taskId = currentTaskIdForComment;
+  if (!taskId) return;
+  
+  const text = document.getElementById('taskCommentText').value.trim();
+  if (!text && taskCommentFiles.length === 0) {
+    showToast('Введите текст или прикрепите файл');
+    return;
+  }
+  
+  showLoadingOverlay(false);
+  
+  try {
+    const formData = new FormData();
+    formData.append('text', text);
+    taskCommentFiles.forEach(file => {
+      formData.append('files', file);
+    });
+    
+    const response = await fetch('/api/tasks/' + taskId + '/comment', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      document.getElementById('taskCommentText').value = '';
+      document.getElementById('taskFileInput').value = '';
+      document.getElementById('taskFilePreview').innerHTML = '';
+      taskCommentFiles = [];
+      showToast('Комментарий добавлен');
+    } else {
+      showToast('Ошибка: ' + (data.error || 'Не удалось добавить комментарий'));
+    }
+  } catch (error) {
+    console.error('Error adding comment:', error);
+    showToast('Ошибка соединения');
+  } finally {
+    hideLoadingOverlay();
+  }
+}
+
+// Complete task with optional comment
+async function completeTaskWithComment(taskId) {
+  const commentText = document.getElementById('taskCommentText').value.trim();
+  
+  if (!confirm('Вы уверены, что хотите завершить эту задачу?')) {
+    return;
+  }
+  
+  showLoadingOverlay(true);
+  
+  try {
+    // Send comment first if exists
+    if (commentText) {
+      try {
+        await fetch('/api/tasks/' + taskId + '/comment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: commentText })
+        });
+      } catch (e) {
+        console.error('Error sending comment:', e);
+      }
+    }
+    
+    // Complete task
+    const response = await fetch('/api/tasks/' + taskId + '/complete', {
+      method: 'POST'
+    });
+    
+    const data = await response.json();
+    if (data.success) {
+      // Update task in list
+      const task = currentTasks.find(t => t.id == taskId);
+      if (task) {
+        task.status = '5';
+      }
+      
+      showSuccess('Задача завершена!', commentText ? 'Задача закрыта с комментарием' : 'Задача успешно закрыта');
+    } else {
+      showToast('Ошибка: ' + (data.error || 'Не удалось завершить задачу'));
+    }
+  } catch (error) {
+    console.error('Error completing task:', error);
+    showToast('Ошибка соединения');
+  } finally {
+    hideLoadingOverlay();
+  }
+}
+
+// Complete task (legacy - without comment)
 async function completeTask(taskId) {
   if (!confirm('Вы уверены, что хотите завершить эту задачу?')) {
     return;
@@ -708,7 +806,54 @@ async function completeTask(taskId) {
     hideLoadingOverlay();
   }
 }
+// Logout - clear session and redirect to login
+async function logout() {
+  try {
+    // Call server logout
+    await fetch('/api/logout', { method: 'POST' });
+  } catch (e) {
+    console.log('Server logout error:', e);
+  }
+  
+  // Clear all storage
+  localStorage.clear();
+  sessionStorage.clear();
+  
+  // Clear cookies
+  document.cookie.split(';').forEach(function(c) {
+    document.cookie = c.trim().split('=')[0] + '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;';
+  });
+  
+  // Clear cache
+  if ('caches' in window) {
+    try {
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map(name => caches.delete(name)));
+    } catch (e) {
+      console.error('Error clearing cache:', e);
+    }
+  }
+  
+  // Unregister service worker
+  if ('serviceWorker' in navigator) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map(reg => reg.unregister()));
+    } catch (e) {
+      console.error('Error unregistering SW:', e);
+    }
+  }
+  
+  // Redirect to Black Hole logout
+  window.location.href = '/_gw/logout';
+}
+
 // Service Worker for PWA
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(console.error);
 }
+
+
+
+
+

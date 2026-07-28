@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a73e8">
+  <title>Мобильная торговля</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <h1>📱 Мобильная торговля</h1>
+      <div class="user-info" id="userInfo"></div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <!-- Company Selection Screen -->
+      <section id="companyScreen" class="screen active">
+        <div class="search-box">
+          <input type="text" id="companySearch" placeholder="🔍 Поиск компании...">
+        </div>
+        <div class="companies-list" id="companiesList">
+          <div class="loading">Загрузка компаний...</div>
+        </div>
+      </section>
+
+      <!-- Company Detail Screen -->
+      <section id="companyDetailScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('companyScreen')">← Назад к списку</button>
+        <div class="company-card" id="companyCard"></div>
+        
+        <div class="actions-grid">
+          <button class="action-btn visit" onclick="showVisitForm()">
+            <span class="icon">📍</span>
+            <span class="label">Отметка<br>посещения</span>
+          </button>
+          <button class="action-btn photo" onclick="showPhotoForm()">
+            <span class="icon">📸</span>
+            <span class="label">Фотоотчет</span>
+          </button>
+          <button class="action-btn note" onclick="showNoteForm()">
+            <span class="icon">📝</span>
+            <span class="label">Заметка</span>
+          </button>
+          <button class="action-btn order" onclick="showOrderForm()">
+            <span class="icon">📦</span>
+            <span class="label">Заказ</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Visit Form -->
+      <section id="visitFormScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('companyDetailScreen')">← Назад</button>
+        <h2>📍 Отметка посещения</h2>
+        <form id="visitForm" class="action-form">
+          <div class="form-group">
+            <label>Компания</label>
+            <div id="visitCompanyName" class="company-name-display"></div>
+          </div>
+          <div class="form-group">
+            <label>Местоположение</label>
+            <button type="button" class="btn-location" onclick="getLocation()">
+              📍 Определить местоположение
+            </button>
+            <div id="locationDisplay" class="location-display"></div>
+          </div>
+          <div class="form-group">
+            <label>Комментарий</label>
+            <textarea id="visitComment" rows="4" placeholder="Опишите результат визита..."></textarea>
+          </div>
+          <button type="submit" class="btn-submit">✅ Сохранить отметку</button>
+        </form>
+      </section>
+
+      <!-- Photo Form -->
+      <section id="photoFormScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('companyDetailScreen')">← Назад</button>
+        <h2>📸 Фотоотчет</h2>
+        <form id="photoForm" class="action-form" enctype="multipart/form-data">
+          <div class="form-group">
+            <label>Компания</label>
+            <div id="photoCompanyName" class="company-name-display"></div>
+          </div>
+          <div class="form-group">
+            <label>Фотографии</label>
+            <input type="file" id="photoInput" accept="image/*" multiple capture="environment">
+            <div id="photoPreview" class="photo-preview"></div>
+          </div>
+          <div class="form-group">
+            <label>Комментарий</label>
+            <textarea id="photoComment" rows="3" placeholder="Описание фотографий..."></textarea>
+          </div>
+          <button type="submit" class="btn-submit">📤 Отправить фотоотчет</button>
+        </form>
+      </section>
+
+      <!-- Note Form -->
+      <section id="noteFormScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('companyDetailScreen')">← Назад</button>
+        <h2>📝 Заметка</h2>
+        <form id="noteForm" class="action-form">
+          <div class="form-group">
+            <label>Компания</label>
+            <div id="noteCompanyName" class="company-name-display"></div>
+          </div>
+          <div class="form-group">
+            <label>Тема</label>
+            <input type="text" id="noteSubject" placeholder="Тема заметки...">
+          </div>
+          <div class="form-group">
+            <label>Текст заметки</label>
+            <textarea id="noteText" rows="6" placeholder="Введите текст заметки..."></textarea>
+          </div>
+          <button type="submit" class="btn-submit">💾 Сохранить заметку</button>
+        </form>
+      </section>
+
+      <!-- Order Form -->
+      <section id="orderFormScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('companyDetailScreen')">← Назад</button>
+        <h2>📦 Заказ</h2>
+        <form id="orderForm" class="action-form">
+          <div class="form-group">
+            <label>Компания</label>
+            <div id="orderCompanyName" class="company-name-display"></div>
+          </div>
+          <div class="form-group">
+            <label>Товары</label>
+            <div id="productsList" class="products-list">
+              <div class="loading">Загрузка товаров...</div>
+            </div>
+          </div>
+          <div class="order-summary">
+            <div class="total">Итого: <span id="orderTotal">0</span> ₽</div>
+          </div>
+          <div class="form-group">
+            <label>Комментарий к заказу</label>
+            <textarea id="orderComment" rows="3" placeholder="Дополнительная информация..."></textarea>
+          </div>
+          <button type="submit" class="btn-submit">📦 Оформить заказ</button>
+        </form>
+      </section>
+
+      <!-- Success Screen -->
+      <section id="successScreen" class="screen">
+        <div class="success-message">
+          <div class="success-icon">✅</div>
+          <h2 id="successTitle">Успешно!</h2>
+          <p id="successMessage">Данные сохранены</p>
+          <button class="btn-submit" onclick="showScreen('companyDetailScreen')">Вернуться к компании</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

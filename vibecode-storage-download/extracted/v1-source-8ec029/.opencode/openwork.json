@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "workspace": {
+    "name": "Bitrix",
+    "createdAt": 1784540615734,
+    "preset": "starter"
+  },
+  "authorizedRoots": [
+    "C:\\Users\\Александр\\Documents\\Bitrix"
+  ],
+  "reload": null
+}

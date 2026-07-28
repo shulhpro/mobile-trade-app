@@ -1,0 +1,123 @@
+﻿    // Create subtask for order if orderData exists
+    let orderSubtaskId = null;
+    if (orderData) {
+      try {
+        const orderItems = JSON.parse(orderData);
+        if (orderItems.items && orderItems.items.length > 0) {
+          // Build order table for subtask description
+          let orderDescription = '📦 ЗАКАЗ КЛИЕНТА\n\n';
+          orderDescription += '| № | Наименование | Кол-во | Цена | Сумма |\n';
+          orderDescription += '|---|-------------|--------|------|-------|\n';
+          
+          orderItems.items.forEach((item, idx) => {
+            const itemTotal = item.quantity * item.price;
+            orderDescription += '| ' + (idx + 1) + ' | ' + item.name + ' | ' + item.quantity + ' | ' + item.price.toFixed(2) + ' ₽ | ' + itemTotal.toFixed(2) + ' ₽ |\n';
+          });
+          
+          orderDescription += '| | | | **ИТОГО:** | **' + orderItems.total.toFixed(2) + ' ₽** |\n';
+          
+          const subtaskData = {
+            title: 'Заказ (' + (companyResponse.data.data?.title || 'Клиент') + ')',
+            description: orderDescription,
+            responsibleId: task.responsibleId || (req.currentUser ? req.currentUser.id : 10),
+            parentId: parseInt(task.id),
+            status: 2
+          };
+          
+          // Add groupId if provided
+          if (req.body.groupId) {
+            subtaskData.groupId = parseInt(req.body.groupId);
+          }
+          
+          // Add auditors if found
+          if (auditors.length > 0) {
+            subtaskData.auditors = auditors;
+          }
+          
+          const subtaskResponse = await callVibeCode('POST', '/tasks', subtaskData);
+          orderSubtaskId = subtaskResponse.data.data.id;
+          console.log('Created order subtask:', orderSubtaskId);
+          
+          // Generate HTML file with order table
+          const companyName = companyResponse && companyResponse.data && companyResponse.data.data ? companyResponse.data.data.title : 'Клиент';
+          const now = new Date().toLocaleString('ru-RU');
+          
+          let htmlContent = '<!DOCTYPE html>\n<html lang="ru">\n<head>\n';
+          htmlContent += '<meta charset="UTF-8">\n';
+          htmlContent += '<title>Заказ - ' + companyName + '</title>\n';
+          htmlContent += '<style>\n';
+          htmlContent += 'body { font-family: Arial, sans-serif; margin: 40px; color: #333; }\n';
+          htmlContent += 'h1 { color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; }\n';
+          htmlContent += '.info { margin: 20px 0; color: #666; }\n';
+          htmlContent += 'table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n';
+          htmlContent += 'th { background: #1a73e8; color: white; padding: 12px; text-align: left; }\n';
+          htmlContent += 'td { padding: 10px; border-bottom: 1px solid #ddd; }\n';
+          htmlContent += 'tr:nth-child(even) { background: #f8f9fa; }\n';
+          htmlContent += '.total { font-weight: bold; font-size: 1.2em; color: #1a73e8; }\n';
+          htmlContent += '.total-row { background: #e8f0fe !important; }\n';
+          htmlContent += '</style>\n</head>\n<body>\n';
+          htmlContent += '<h1>📦 Заказ клиента</h1>\n';
+          htmlContent += '<div class="info">\n';
+          htmlContent += '<p><strong>Клиент:</strong> ' + companyName + '</p>\n';
+          htmlContent += '<p><strong>Дата:</strong> ' + now + '</p>\n';
+          htmlContent += '</div>\n';
+          htmlContent += '<table>\n';
+          htmlContent += '<tr><th>№</th><th>Наименование</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr>\n';
+          
+          orderItems.items.forEach((item, idx) => {
+            const itemTotal = item.quantity * item.price;
+            htmlContent += '<tr>';
+            htmlContent += '<td>' + (idx + 1) + '</td>';
+            htmlContent += '<td>' + item.name + '</td>';
+            htmlContent += '<td>' + item.quantity + '</td>';
+            htmlContent += '<td>' + item.price.toFixed(2) + ' ₽</td>';
+            htmlContent += '<td>' + itemTotal.toFixed(2) + ' ₽</td>';
+            htmlContent += '</tr>\n';
+          });
+          
+          htmlContent += '<tr class="total-row">';
+          htmlContent += '<td colspan="4" class="total">ИТОГО:</td>';
+          htmlContent += '<td class="total">' + orderItems.total.toFixed(2) + ' ₽</td>';
+          htmlContent += '</tr>\n';
+          htmlContent += '</table>\n</body>\n</html>';
+          
+          // Upload HTML file to disk
+          const htmlBase64 = Buffer.from(htmlContent).toString('base64');
+          const htmlUploadResponse = await callVibeCode('POST', '/files/upload', {
+            folderId: 19,
+            filename: 'Zakaz_' + companyName.replace(/[^a-zA-Z0-9а-яА-Я]/g, '_') + '_' + Date.now() + '.html',
+            content: htmlBase64
+          });
+          
+          const htmlFileId = htmlUploadResponse.data.data?.id;
+          console.log('Uploaded HTML file:', htmlFileId);
+          
+          // Attach HTML file to subtask using batch API
+          if (htmlFileId) {
+            const attachBatchBody = {
+              calls: [
+                {
+                  entity: 'tasks',
+                  action: 'update',
+                  entityId: parseInt(orderSubtaskId),
+                  params: {
+                    ufTaskWebdavFiles: ['n' + htmlFileId]
+                  }
+                }
+              ]
+            };
+            
+            await axios.post(VIBECODE_BASE_URL + '/batch', attachBatchBody, {
+              headers: {
+                'Authorization': 'Bearer ' + VIBECODE_API_KEY,
+                'Content-Type': 'application/json'
+              }
+            });
+            console.log('Attached HTML file to subtask:', orderSubtaskId);
+          }
+        }
+      } catch (orderError) {
+        console.error('Error creating order subtask:', orderError.message);
+      }
+    }
+    

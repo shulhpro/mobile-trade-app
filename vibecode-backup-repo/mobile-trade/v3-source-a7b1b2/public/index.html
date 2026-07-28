@@ -1,0 +1,179 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2c5aa0">
+    <title>Mobile Trade</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="home-page" class="page active">
+            <header class="app-header">
+                <h1>Companies</h1>
+                <div class="header-actions">
+                    <button class="icon-btn" id="refreshBtn">R</button>
+                </div>
+            </header>
+            <div class="search-container">
+                <div class="search-box">
+                    <span class="search-icon">S</span>
+                    <input type="text" id="companySearch" placeholder="Search companies..." autocomplete="off">
+                    <button class="clear-search" id="clearSearch" style="display:none">X</button>
+                </div>
+            </div>
+            <div class="companies-list" id="companiesList">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <div id="company-detail-page" class="page">
+            <header class="app-header">
+                <button class="btn-back" id="backToHome">&lt;-</button>
+                <h1 id="detailName">Company</h1>
+            </header>
+            <div class="detail-content">
+                <div class="company-card">
+                    <div class="company-icon">B</div>
+                    <div class="company-info">
+                        <h2 id="detailCompanyName"></h2>
+                        <p class="company-address" id="detailAddress"></p>
+                    </div>
+                </div>
+                <div class="info-section">
+                    <h3>Contact Info</h3>
+                    <div class="info-item">
+                        <span class="info-label">Contact:</span>
+                        <span class="info-value" id="detailContact"></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Phone:</span>
+                        <a class="info-value phone-link" id="detailPhone" href=""></a>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Email:</span>
+                        <a class="info-value email-link" id="detailEmail" href=""></a>
+                    </div>
+                </div>
+                <div class="action-section">
+                    <button class="btn btn-primary btn-large" id="startVisitBtn">
+                        <span class="btn-icon">V</span>
+                        Start Visit
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="visit-flow-page" class="page">
+            <header class="app-header">
+                <button class="btn-back" id="backToDetail">&lt;-</button>
+                <h1 id="visitStepTitle">Step 1: Location</h1>
+                <div class="step-indicator">
+                    <span id="currentStep">1</span> / 4
+                </div>
+            </header>
+            
+            <div id="step-location" class="step-content active">
+                <div class="step-card">
+                    <div class="step-icon">L</div>
+                    <h2>Location</h2>
+                    <p>Capture your location</p>
+                    <div id="locationStatus" class="status-box">
+                        <span class="status-icon">W</span>
+                        <span class="status-text">Waiting...</span>
+                    </div>
+                    <button class="btn btn-primary" id="captureLocationBtn">
+                        <span class="btn-icon">L</span>
+                        Get Location
+                    </button>
+                </div>
+            </div>
+
+            <div id="step-photo" class="step-content">
+                <div class="step-card">
+                    <div class="step-icon">P</div>
+                    <h2>Photo</h2>
+                    <p>Take a photo</p>
+                    <div id="photoPreview" class="photo-preview">
+                        <div class="photo-placeholder">
+                            <span class="photo-icon">C</span>
+                            <span>No photo</span>
+                        </div>
+                    </div>
+                    <div class="photo-gallery" id="photoGallery"></div>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+                    <button class="btn btn-primary" id="takePhotoBtn">
+                        <span class="btn-icon">P</span>
+                        Take Photo
+                    </button>
+                </div>
+            </div>
+
+            <div id="step-note" class="step-content">
+                <div class="step-card">
+                    <div class="step-icon">N</div>
+                    <h2>Note</h2>
+                    <p>Add visit notes</p>
+                    <textarea id="visitNote" placeholder="Enter notes..." rows="6"></textarea>
+                    <div class="note-hint">
+                        <span>I</span> Describe the visit
+                    </div>
+                </div>
+            </div>
+
+            <div id="step-order" class="step-content">
+                <div class="step-card">
+                    <div class="step-icon">O</div>
+                    <h2>Order</h2>
+                    <p>Add products to order</p>
+                    <div class="products-list" id="productsList">
+                        <div class="loading">Loading products...</div>
+                    </div>
+                    <div class="order-summary-card">
+                        <div class="order-summary-row">
+                            <span>Items:</span>
+                            <span id="orderItemsCount">0</span>
+                        </div>
+                        <div class="order-summary-row total">
+                            <span>Total:</span>
+                            <span id="orderTotalAmount">0 RUB</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="step-footer">
+                <button id="prevStepBtn" class="btn btn-secondary" style="display:none">
+                    <span class="btn-icon">&lt;-</span>
+                    Back
+                </button>
+                <button id="nextStepBtn" class="btn btn-primary">
+                    Next
+                    <span class="btn-icon">-&gt;</span>
+                </button>
+            </footer>
+        </div>
+
+        <div id="completionModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-icon">D</div>
+                <h2>Visit Complete!</h2>
+                <p>Create task in Bitrix24?</p>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="skipTaskBtn">Skip</button>
+                    <button class="btn btn-primary" id="createTaskBtn">
+                        <span class="btn-icon">T</span>
+                        Create Task
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="toastContainer"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

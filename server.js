@@ -1,541 +1,676 @@
 ﻿const express = require('express');
+const axios = require('axios');
 const multer = require('multer');
-const cors = require('cors');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const VIBECODE_API = 'https://vibecode.bitrix24.tech/v1';
-const FALLBACK_API_KEY = 'vibe_api_B5LhuhAlxAfjnWVLTCD6RU0UsDWl6IvV_05fc97';
+const VIBECODE_API_KEY = process.env.VIBECODE_API_KEY || '';
+const VIBECODE_BASE_URL = 'https://vibecode.bitrix24.tech/v1';
 
-app.use(cors());
+// CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Auth middleware
+app.use((req, res, next) => {
+  const userId = req.headers['x-vibe-user-id'] || req.headers['x-b24-user-id'];
+  const portalId = req.headers['x-vibe-portal-id'] || req.headers['x-b24-portal-id'];
+  
+  if (userId && userId !== 'null' && userId !== 'undefined' && userId.length > 0) {
+    req.currentUser = { id: userId, portalId: portalId };
+    console.log('Authenticated user:', req.currentUser.id, 'portal:', portalId);
+  } else {
+    req.currentUser = null;
+    console.log('No user in headers, using fallback');
+  }
+  next();
+});
+
 app.use(express.json());
 
-app.use((req, res, next) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  next();
+// Multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
 });
+const upload = multer({ storage });
 
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  }
-  next();
-});
-
-app.use(express.static('public'));
-
-const upload = multer({ dest: 'uploads/' });
-
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
-}
-
-const db = {
-  visits: [],
-  orders: []
-};
-
-function parseCookies(req) {
-  const cookies = {};
-  const cookieHeader = req.headers.cookie;
-  if (cookieHeader) {
-    cookieHeader.split(';').forEach(cookie => {
-      const parts = cookie.trim().split('=');
-      if (parts.length === 2) {
-        cookies[parts[0]] = decodeURIComponent(parts[1]);
-      }
-    });
-  }
-  return cookies;
-}
-
-function getSessionToken(req) {
-  const authHeader = req.headers['x-vibe-authorization'] || req.headers['authorization'];
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7);
-  }
-  const cookies = parseCookies(req);
-  if (cookies.vibe_session) {
-    return cookies.vibe_session;
-  }
-  return null;
-}
-
-function saveSessionToken(res, token) {
-  if (token) {
-    res.setHeader('Set-Cookie', 'vibe_session=' + token + '; Path=/; SameSite=Strict; Max-Age=86400');
-  }
-}
-
-function getApiKey(req) {
-  const apiKey = req.headers['x-api-key'];
-  if (apiKey) return apiKey;
-  return FALLBACK_API_KEY;
-}
-
-async function getCurrentUser(req) {
-  const token = getSessionToken(req);
+// VibeCode API helper
+async function callVibeCode(method, endpoint, data = null, isFormData = false) {
+  const url = VIBECODE_BASE_URL + endpoint;
+  const headers = {
+    'Authorization': 'Bearer ' + VIBECODE_API_KEY
+  };
   
-  // If no token, return default user (for testing/direct access)
-  if (!token) {
-    console.log('No session token, using default user');
-    return { id: 10, name: 'Default User' };
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
   }
   
   try {
-    const response = await fetch(VIBECODE_API + '/me', {
-      headers: {
-        'Authorization': 'Bearer ' + token
-      }
-    });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
-    if (data.success && data.data) {
-      const user = {
-        id: data.data.owner?.userId || data.data.user?.id || 1,
-        name: data.data.owner?.name || 'User'
-      };
-      console.log('Current user:', user);
-      return user;
+    if (method === 'GET') {
+      return await axios.get(url, { headers, params: data });
+    } else if (method === 'POST') {
+      return await axios.post(url, data, { headers });
+    } else if (method === 'PATCH') {
+      return await axios.patch(url, data, { headers });
     }
   } catch (error) {
-    console.error('Error getting current user:', error);
-    // Fallback to default user on error
-    return { id: 10, name: 'Default User' };
-  }
-  
-  return { id: 10, name: 'Default User' };
-}
-
-async function callVibeApi(req, endpoint) {
-  const apiKey = getApiKey(req);
-  
-  try {
-    const response = await fetch(VIBECODE_API + endpoint, {
-      headers: {
-        'X-Api-Key': apiKey
-      }
-    });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
-    return data.success ? data.data : [];
-  } catch (error) {
-    console.error('API Error:', error);
+    console.error('VibeCode API error (' + endpoint + '):', error.response?.data || error.message);
     throw error;
   }
 }
 
-// Optional auth - save token if present, but don't require it
-app.use('/api', (req, res, next) => {
-  const headerToken = req.headers['x-vibe-authorization'];
-  if (headerToken && headerToken.startsWith('Bearer ')) {
-    saveSessionToken(res, headerToken.substring(7));
-  }
-  next();
-});
-
-// Get current session info
-app.get('/api/session', async (req, res) => {
+// Find existing open task for company
+async function findOpenTaskForCompany(companyId) {
   try {
-    const token = getSessionToken(req);
-    const user = await getCurrentUser(req);
-    
-    res.json({
-      authenticated: !!token,
-      token: token ? token.substring(0, 20) + '...' : null,
-      user: user
+    const response = await callVibeCode('GET', '/tasks', { 
+      'filter[ufCrmTask]': 'CO_' + companyId,
+      'filter[status]': '2',
+      'limit': 1,
+      'sort': '-createdDate'
     });
-  } catch (error) {
-    res.json({
-      authenticated: false,
-      error: error.message
-    });
-  }
-});
-app.get('/api/user-context', async (req, res) => {
-  try {
-    const user = await getCurrentUser(req);
-    const apiKey = getApiKey(req);
     
-    let workgroups = [];
-    try {
-      const response = await fetch(VIBECODE_API + '/batch', {
-        method: 'POST',
-        headers: {
-          'X-Api-Key': apiKey,
-          'Content-Type': 'application/json; charset=utf-8'
-        },
-        body: JSON.stringify({
-          halt: 0,
-          cmd: {
-            get_groups: 'sonet_group.get?FILTER[ACTIVE]=Y&LIMIT=50'
-          }
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const groups = data.result?.result?.get_groups || [];
-        workgroups = groups.map(g => ({
-          id: g.ID,
-          name: g.NAME
-        }));
-      }
-    } catch (e) {
-      console.error('Error fetching workgroups:', e);
+    if (response.data.data && response.data.data.length > 0) {
+      return response.data.data[0];
     }
-    
-    res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        lastName: ''
-      },
-      workgroups: workgroups,
-      departmentHead: null
-    });
+    return null;
   } catch (error) {
-    console.error('Error getting user context:', error);
-    res.status(500).json({ error: 'Failed to get user context', message: error.message });
+    console.error('Error finding task:', error.message);
+    return null;
   }
-});
+}
 
+// Get companies
 app.get('/api/companies', async (req, res) => {
   try {
-    console.log('Fetching companies...');
-    const search = req.query.search?.toLowerCase() || '';
-    const companies = await callVibeApi(req, '/companies?limit=50');
-    console.log('Companies fetched:', companies.length);
-    
-    let result = companies.map(c => ({
-      id: c.id,
-      TITLE: c.title,
-      title: c.title,
-      ADDRESS: c.address || c.ufCrm_1508844257 || '',
-      address: c.address || c.ufCrm_1508844257 || '',
-      phone: c.phone || '',
-      email: c.email || '',
-      fm: c.phone ? [{ typeId: 'PHONE', value: c.phone }] : []
-    }));
-    
-    if (search) {
-      result = result.filter(c => 
-        (c.title || '').toLowerCase().includes(search) || 
-        (c.address || '').toLowerCase().includes(search)
-      );
+    const response = await callVibeCode('GET', '/companies', { limit: 100 });
+    res.json({ result: response.data.data, total: response.data.meta?.total });
+  } catch (error) {
+    console.log('API unavailable, using local data');
+    try {
+      const localData = require('./public/companies.json');
+      res.json({ result: localData, total: localData.length });
+    } catch (localError) {
+      console.error('Error loading local companies:', localError.message);
+      res.status(500).json({ error: error.message });
     }
-    
-    res.json({ result: result });
-  } catch (error) {
-    console.error('Error fetching companies:', error);
-    res.status(500).json({ error: 'Failed to fetch companies', message: error.message });
   }
 });
 
-app.get('/api/sections', async (req, res) => {
+// Get company by ID
+app.get('/api/companies/:id', async (req, res) => {
   try {
-    const sections = await callVibeApi(req, '/catalog-sections?filter[iblockId]=24&limit=50');
-    
-    const result = sections.map(s => ({
-      id: s.id,
-      name: s.name,
-      code: s.code,
-      sort: s.sort || 500
-    })).sort((a, b) => a.sort - b.sort);
-    
-    res.json({ result: result });
+    const response = await callVibeCode('GET', '/companies/' + req.params.id);
+    res.json({ result: response.data.data });
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to fetch sections', message: error.message });
+    console.error('Error fetching company:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/products', async (req, res) => {
-  try {
-    const sectionId = req.query.sectionId;
-    let endpoint = '/products?limit=50';
-    
-    if (sectionId) {
-      endpoint = '/products?filter[sectionId]=' + sectionId + '&limit=50';
-    }
-    
-    const products = await callVibeApi(req, endpoint);
-    
-    const result = products.map(p => ({
-      id: p.id,
-      ID: p.id,
-      name: p.name,
-      NAME: p.name,
-      price: p.price || 0,
-      PRICE: p.price || 0,
-      unit: p.measure || 'pc',
-      sectionId: p.sectionId
-    }));
-    
-    res.json({ result: result });
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Failed to fetch products', message: error.message });
-  }
-});
-
+// Process visit
 app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   try {
-    const user = await getCurrentUser(req);
-    const apiKey = getApiKey(req);
-    const companyId = req.body.companyId;
-    const subject = req.body.subject || 'Visit';
-    const description = req.body.description || '';
-    const noteText = req.body.noteText || '';
-    const closeVisit = req.body.closeVisit === 'true';
-    const groupId = req.body.groupId || null;
-    const location = req.body.location ? JSON.parse(req.body.location) : null;
-    const orderData = req.body.orderData ? JSON.parse(req.body.orderData) : null;
+    console.log('Processing visit, body:', req.body);
+    console.log('Files received:', req.files ? req.files.length : 0);
     
-    const photoUrls = [];
-    if (req.files && req.files.length > 0) {
-      req.files.forEach(file => {
-        photoUrls.push('/uploads/' + file.filename);
-      });
-    }
+    const { companyId, type, subject, description, location, orderData, noteText, closeVisit } = req.body;
+    const files = req.files || [];
     
-    let taskDescription = description || '';
-    if (noteText) {
-      taskDescription += '\n\nNotes: ' + noteText;
-    }
-    if (location) {
-      taskDescription += '\n\nLocation: ' + location.latitude + ', ' + location.longitude;
-    }
-    if (orderData && orderData.items && orderData.items.length > 0) {
-      taskDescription += '\n\nOrder:\n';
-      orderData.items.forEach(item => {
-        taskDescription += '- ' + item.name + ': ' + item.quantity + ' x ' + item.price + '? = ' + (item.quantity * item.price).toFixed(2) + '?\n';
-      });
-      taskDescription += '\nTotal: ' + orderData.total.toFixed(2) + '?';
-    }
+    let task = await findOpenTaskForCompany(companyId);
+    let isNewTask = false;
+    let companyResponse = null;
+    let auditors = [];
     
-    if (photoUrls && photoUrls.length > 0) {
-      taskDescription += '\n\n[B]Photos:[/B]\n';
-      photoUrls.forEach((url, index) => {
-        const fullUrl = req.protocol + '://' + req.get('host') + url;
-        taskDescription += '[URL=' + fullUrl + ']Photo ' + (index + 1) + ' - Click to view[/URL]\n';
-      });
-    }
-    
-    const batchData = {
-      halt: 0,
-      calls: [
-        {
-          entity: "tasks",
-          action: "create",
-          params: {
-              TITLE: subject,
-              DESCRIPTION: taskDescription,
-              RESPONSIBLE_ID: parseInt(user.id),
-              PRIORITY: 2,
-              STATUS: closeVisit ? 5 : 2,
-              GROUP_ID: parseInt(groupId) || 0,
-              UF_CRM_TASK: "CO_" + companyId
-            }
+    if (!task) {
+      companyResponse = await callVibeCode('GET', '/companies/' + companyId);
+      const companyName = companyResponse.data.data?.title || 'РљР»РёРµРЅС‚';
+      
+      try {
+        const userResponse = await callVibeCode('GET', '/users/me');
+        const user = userResponse.data.data;
+        if (user.departmentId && user.departmentId.length > 0) {
+          const deptResponse = await callVibeCode('GET', '/departments/' + user.departmentId[0]);
+          const dept = deptResponse.data.data;
+          if (dept && dept.headId && dept.headId !== user.id) {
+            auditors.push(dept.headId);
+          }
         }
-      ]
-    };
-    
-    const response = await fetch(VIBECODE_API + '/batch', {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': apiKey,
-        'Content-Type': 'application/json; charset=utf-8'
-      },
-      body: JSON.stringify(batchData)
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error('HTTP ' + response.status + ': ' + errorText);
+      } catch (e) {
+        console.log('Could not get department head:', e.message);
+      }
+      
+      const taskData = {
+        title: subject || 'Р’РёР·РёС‚ Рє ' + companyName,
+        description: 'РќР°С‡Р°Р»Рѕ РІРёР·РёС‚Р°\n',
+        responsibleId: req.currentUser ? req.currentUser.id : 10,
+        ufCrmTask: ['CO_' + companyId],
+        status: 2
+      };
+      
+      if (req.body.groupId) {
+        taskData.groupId = parseInt(req.body.groupId);
+      }
+      
+      if (auditors.length > 0) {
+        taskData.auditors = auditors;
+      }
+      
+      const newTaskResponse = await callVibeCode('POST', '/tasks', taskData);
+      task = newTaskResponse.data.data;
+      isNewTask = true;
+      console.log('Created new task:', task.id, 'groupId:', taskData.groupId, 'auditors:', auditors);
+    } else {
+      console.log('Found existing task:', task.id);
+      try {
+        companyResponse = await callVibeCode('GET', '/companies/' + companyId);
+      } catch (e) {
+        console.log('Could not fetch company for subtask:', e.message);
+      }
     }
     
-    const result = await response.json();
-    const taskId = result.data?.results?.["0"]?.id || result.data?.results?.[0]?.id;
+    let newContent = '\n';
+    const now = new Date().toLocaleString('ru-RU');
+    newContent += '=== ' + now + ' ===\n\n';
     
-    const visit = {
-      id: Date.now(),
-      companyId: companyId,
-      companyName: subject,
-      userId: user.id,
-      userName: user.name,
-      startTime: new Date().toISOString(),
-      endTime: closeVisit ? new Date().toISOString() : null,
-      coords: location,
-      photos: photoUrls,
-      note: noteText || description,
-      order: orderData || { items: [], total: 0 },
-      status: closeVisit ? 'completed' : 'in_progress',
-      taskId: taskId
-    };
+    if (type === 'visit' || location) {
+      newContent += 'рџ“Ќ РџРѕСЃРµС‰РµРЅРёРµ РєР»РёРµРЅС‚Р°\n';
+      newContent += (description || '') + '\n';
+      if (location) {
+        const loc = JSON.parse(location);
+        newContent += '\nрџ“Ќ РљРѕРѕСЂРґРёРЅР°С‚С‹: ' + loc.latitude + ', ' + loc.longitude + '\n';
+      }
+      newContent += '\n---\n\n';
+    }
     
-    db.visits.push(visit);
+    if (type === 'photo' || files.length > 0) {
+      newContent += 'рџ“ё Р¤РѕС‚РѕРѕС‚С‡РµС‚\n';
+      newContent += (description || '') + '\n';
+      newContent += '\n---\n\n';
+    }
     
-    res.json({
+    if (type === 'note' || noteText) {
+      newContent += 'рџ“ќ Р—Р°РјРµС‚РєР°\n';
+      newContent += (noteText || description || '') + '\n';
+      newContent += '\n---\n\n';
+    }
+    
+    if (type === 'order' || orderData) {
+      newContent += 'рџ“¦ Р—РђРљРђР—\n';
+      newContent += (description || '') + '\n';
+      if (orderData) {
+        const orderItems = JSON.parse(orderData);
+        if (orderItems.items && orderItems.items.length > 0) {
+          newContent += '\nрџ“‹ РЎРїРёСЃРѕРє С‚РѕРІР°СЂРѕРІ:\n';
+          orderItems.items.forEach((item, idx) => {
+            newContent += (idx + 1) + '. ' + item.name + ' вЂ” ' + item.quantity + ' С€С‚. Г— ' + item.price + ' в‚Ѕ = ' + (item.quantity * item.price) + ' в‚Ѕ\n';
+          });
+          newContent += '\nрџ’° РС‚РѕРіРѕ: ' + orderItems.total + ' в‚Ѕ\n';
+        }
+      }
+      newContent += '\n---\n\n';
+    }
+    
+    const uploadedFiles = [];
+    const uploadedFileIds = [];
+    for (const file of files) {
+      try {
+        const fileData = fs.readFileSync(file.path);
+        const base64Content = fileData.toString('base64');
+        
+        const uploadResponse = await callVibeCode('POST', '/files/upload', {
+          folderId: 19,
+          filename: 'visit_' + Date.now() + '_' + Math.floor(Math.random() * 1000) + '_' + file.originalname,
+          content: base64Content
+        });
+        
+        uploadedFiles.push({
+          diskId: uploadResponse.data.data?.id,
+          name: 'visit_' + Date.now() + '_' + Math.floor(Math.random() * 1000) + '_' + file.originalname,
+          id: uploadResponse.data.data?.id,
+          url: uploadResponse.data.data?.url
+        });
+        
+        uploadedFileIds.push(uploadResponse.data.data?.id);
+        fs.unlinkSync(file.path);
+      } catch (uploadError) {
+        console.error('Error uploading file:', uploadError.message);
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      }
+    }
+    
+    if (uploadedFiles.length > 0) {
+      newContent += 'рџ“Ћ РџСЂРёРєСЂРµРїР»РµРЅРЅС‹Рµ С„Р°Р№Р»С‹:\n';
+      uploadedFiles.forEach((file, idx) => {
+        newContent += (idx + 1) + '. ' + file.name + '\n';
+      });
+      newContent += '\n---\n\n';
+    }
+    
+    const currentDescription = task.description || '';
+    const updatedDescription = currentDescription + newContent;
+    
+    if (uploadedFileIds.length > 0) {
+      const batchBody = {
+        calls: [
+          {
+            entity: 'tasks',
+            action: 'update',
+            entityId: parseInt(task.id),
+            params: {
+              description: updatedDescription,
+              ufTaskWebdavFiles: uploadedFileIds.map(id => 'n' + id)
+            }
+          }
+        ]
+      };
+      
+      await axios.post(VIBECODE_BASE_URL + '/batch', batchBody, {
+        headers: {
+          'Authorization': 'Bearer ' + VIBECODE_API_KEY,
+          'Content-Type': 'application/json'
+        }
+      });
+    } else {
+      await callVibeCode('PATCH', '/tasks/' + task.id, {
+        description: updatedDescription
+      });
+    }
+    
+    let orderSubtaskId = null;
+    if (orderData) {
+      try {
+        const orderItems = JSON.parse(orderData);
+        if (orderItems.items && orderItems.items.length > 0) {
+          let orderDescription = 'рџ“¦ Р—Р°РєР°Р· РєР»РёРµРЅС‚Р°\n\n';
+          orderDescription += '| в„– | РќР°РёРјРµРЅРѕРІР°РЅРёРµ | РљРѕР»-РІРѕ | Р¦РµРЅР° | РЎСѓРјРјР° |\n';
+          orderDescription += '|---|-------------|--------|------|-------|\n';
+          
+          orderItems.items.forEach((item, idx) => {
+            const itemTotal = item.quantity * item.price;
+            orderDescription += '| ' + (idx + 1) + ' | ' + item.name + ' | ' + item.quantity + ' | ' + item.price.toFixed(2) + ' в‚Ѕ | ' + itemTotal.toFixed(2) + ' в‚Ѕ |\n';
+          });
+          
+          orderDescription += '| | | | **РРўРћР“Рћ:** | **' + orderItems.total.toFixed(2) + ' в‚Ѕ** |\n';
+          
+          const subtaskData = {
+            title: 'Р—Р°РєР°Р· (' + (companyResponse.data.data?.title || 'РљР»РёРµРЅС‚') + ')',
+            description: orderDescription,
+            responsibleId: task.responsibleId || (req.currentUser ? req.currentUser.id : 10),
+            parentId: parseInt(task.id),
+            status: 2
+          };
+          
+          if (req.body.groupId) {
+            subtaskData.groupId = parseInt(req.body.groupId);
+          }
+          
+          if (auditors.length > 0) {
+            subtaskData.auditors = auditors;
+          }
+          
+          const subtaskResponse = await callVibeCode('POST', '/tasks', subtaskData);
+          orderSubtaskId = subtaskResponse.data.data.id;
+          console.log('Created order subtask:', orderSubtaskId);
+          
+          const XLSX = require('xlsx');
+          const companyName = companyResponse && companyResponse.data && companyResponse.data.data ? companyResponse.data.data.title : 'РљР»РёРµРЅС‚';
+          const now = new Date().toLocaleString('ru-RU');
+          
+          const wb = XLSX.utils.book_new();
+          
+          const data = [
+            ['Р—Р°РєР°Р· РєР»РёРµРЅС‚Р°'],
+            [''],
+            ['РљР»РёРµРЅС‚:', companyName],
+            ['Р”Р°С‚Р°:', now],
+            [''],
+            ['в„–', 'РќР°РёРјРµРЅРѕРІР°РЅРёРµ', 'РљРѕР»-РІРѕ', 'Р¦РµРЅР°', 'РЎСѓРјРјР°']
+          ];
+          
+          orderItems.items.forEach((item, idx) => {
+            const itemTotal = item.quantity * item.price;
+            data.push([
+              idx + 1,
+              item.name,
+              item.quantity,
+              item.price,
+              itemTotal
+            ]);
+          });
+          
+          data.push(['', '', '', 'РРўРћР“Рћ:', orderItems.total]);
+          
+          const ws = XLSX.utils.aoa_to_sheet(data);
+          
+          ws['!cols'] = [
+            { wch: 5 },
+            { wch: 40 },
+            { wch: 10 },
+            { wch: 15 },
+            { wch: 15 }
+          ];
+          
+          XLSX.utils.book_append_sheet(wb, ws, 'Р—Р°РєР°Р·');
+          
+          const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+          const excelBase64 = excelBuffer.toString('base64');
+          
+          const excelUploadResponse = await callVibeCode('POST', '/files/upload', {
+            folderId: 19,
+            filename: 'Zakaz_' + companyName.replace(/[^a-zA-Z0-9]/g, '_') + '_' + Date.now() + '.xlsx',
+            content: excelBase64
+          });
+          
+          const excelFileId = excelUploadResponse.data.data?.id;
+          console.log('Uploaded Excel file:', excelFileId);
+          
+          if (excelFileId) {
+            const attachBatchBody = {
+              calls: [
+                {
+                  entity: 'tasks',
+                  action: 'update',
+                  entityId: parseInt(orderSubtaskId),
+                  params: {
+                    ufTaskWebdavFiles: ['n' + excelFileId]
+                  }
+                }
+              ]
+            };
+            
+            await axios.post(VIBECODE_BASE_URL + '/batch', attachBatchBody, {
+              headers: {
+                'Authorization': 'Bearer ' + VIBECODE_API_KEY,
+                'Content-Type': 'application/json'
+              }
+            });
+            console.log('Attached Excel file to subtask:', orderSubtaskId);
+          }
+        }
+      } catch (orderError) {
+        console.error('Error creating order subtask:', orderError.message);
+      }
+    }
+    
+    if (closeVisit === 'true' || closeVisit === true) {
+      await callVibeCode('PATCH', '/tasks/' + task.id, {
+        status: 5
+      });
+      console.log('Task completed:', task.id);
+    }
+    
+    res.json({ 
       success: true,
-      visit: visit,
-      taskId: taskId
+      taskId: task.id,
+      isNewTask: isNewTask,
+      uploadedFiles: uploadedFiles.length,
+      closed: closeVisit === 'true' || closeVisit === true,
+      orderSubtaskId: orderSubtaskId
     });
   } catch (error) {
-    console.error('Visit creation error:', error);
-    res.status(500).json({ 
-      error: 'Failed to create visit',
-      message: error.message 
-    });
+    console.error('Error processing visit:', error.message);
+    if (req.files) {
+      req.files.forEach(file => {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      });
+    }
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Get task for company
+app.get('/api/tasks/:companyId', async (req, res) => {
+  try {
+    const task = await findOpenTaskForCompany(req.params.companyId);
+    if (task) {
+      res.json({ task: task });
+    } else {
+      res.json({ task: null });
+    }
+  } catch (error) {
+    console.error('Error fetching task:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all tasks
+app.get('/api/tasks', async (req, res) => {
+  try {
+    const response = await callVibeCode('GET', '/tasks', { limit: 50 });
+    res.json({ result: response.data.data || [] });
+  } catch (error) {
+    console.error('Error fetching tasks:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get my tasks
 app.get('/api/my-tasks', async (req, res) => {
   try {
-    const user = await getCurrentUser(req);
-    const apiKey = getApiKey(req);
-    
-    console.log('Loading tasks for user:', user.id);
-    
-    const batchData = {
-      halt: 0,
-      calls: [
-        {
-          entity: "tasks",
-          action: "list",
-          params: {
-            FILTER: {
-              RESPONSIBLE_ID: parseInt(user.id)
-            },
-            ORDER: { ID: "DESC" },
-            LIMIT: 50
-          }
-        }
-      ]
-    };
-    
-    const response = await fetch(VIBECODE_API + '/batch', {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': apiKey,
-        'Content-Type': 'application/json; charset=utf-8'
-      },
-      body: JSON.stringify(batchData)
-    });
-    
-    if (!response.ok) {
-      throw new Error('HTTP ' + response.status);
+    let userId;
+    if (req.currentUser) {
+      userId = req.currentUser.id;
+    } else {
+      const meResponse = await callVibeCode('GET', '/users/me');
+      userId = meResponse.data.data.id;
     }
-    
-    const data = await response.json();
-    const tasks = data.data?.results?.["0"] || [];
-    
-    const userTasks = tasks.filter(t => t.responsibleId == user.id);
-    
-    console.log('Loaded tasks:', tasks.length, 'Filtered for user:', userTasks.length);
-    
-    res.json({ success: true, tasks: userTasks });
+    const response = await callVibeCode('GET', '/tasks', { 
+      limit: 50,
+      'filter[responsibleId]': userId
+    });
+    res.json({ success: true, tasks: response.data.data || [] });
   } catch (error) {
-    console.error('Error loading tasks:', error);
-    res.status(500).json({ error: 'Failed to load tasks', message: error.message });
+    console.error('Error fetching my tasks:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
+// Get task by ID
+app.get('/api/tasks/:id', async (req, res) => {
+  try {
+    const response = await callVibeCode('GET', '/tasks/' + req.params.id);
+    res.json({ task: response.data.data });
+  } catch (error) {
+    console.error('Error fetching task:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Complete task
 app.post('/api/tasks/:id/complete', async (req, res) => {
   try {
-    const taskId = req.params.id;
-    const apiKey = getApiKey(req);
-    
-    const batchData = {
-      halt: 0,
-      calls: [
-        {
-          entity: "tasks",
-          action: "update",
-          params: {
-            ID: parseInt(taskId),
-            STATUS: 5
-          }
-        }
-      ]
-    };
-    
-    const response = await fetch(VIBECODE_API + '/batch', {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': apiKey,
-        'Content-Type': 'application/json; charset=utf-8'
-      },
-      body: JSON.stringify(batchData)
-    });
-    
-    if (!response.ok) {
-      throw new Error('HTTP ' + response.status);
-    }
-    
-    res.json({ success: true, message: 'Task completed' });
+    const response = await callVibeCode('PATCH', '/tasks/' + req.params.id, { status: 5 });
+    res.json({ success: true, result: response.data.data });
   } catch (error) {
-    console.error('Error completing task:', error);
-    res.status(500).json({ error: 'Failed to complete task', message: error.message });
+    console.error('Error completing task:', error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/visits', async (req, res) => {
+// Add comment to task with files
+app.post('/api/tasks/:id/comment', upload.array('files', 5), async (req, res) => {
   try {
-    const user = await getCurrentUser(req);
-    const body = req.body || {};
-    
-    let orderItems = [];
-    let orderTotal = 0;
-    if (body.order && Array.isArray(body.order)) {
-      orderItems = body.order;
-      orderTotal = body.order.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const taskId = req.params.id;
+    const text = req.body.text || '';
+    const uploadedFiles = [];
+    const fileIds = [];
+
+    // Upload files to disk
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const fileData = fs.readFileSync(file.path);
+        const base64Content = fileData.toString('base64');
+        
+        const uploadResponse = await callVibeCode('POST', '/files/upload', {
+          folderId: 19,
+          filename: 'comment_' + Date.now() + '_' + file.originalname,
+          content: base64Content
+        });
+        
+        uploadedFiles.push(uploadResponse.data.data);
+        fileIds.push(uploadResponse.data.data.id);
+        fs.unlinkSync(file.path);
+      }
     }
+
+    // Add comment
+    let message = text;
+    if (uploadedFiles.length > 0) {
+      const fileLinks = uploadedFiles.map(file => 
+        '[URL=' + (file.url || '') + ']' + file.name + '[/URL]'
+      ).join('\\n');
+      message = message ? message + '\\n' + fileLinks : fileLinks;
+    }
+
+    const commentResponse = await callVibeCode('POST', '/tasks/' + taskId + '/comments', { message: message });
     
-    const visit = {
-      id: Date.now(),
-      companyId: body.companyId,
-      companyName: body.companyName,
-      userId: user.id,
-      userName: user.name,
-      startTime: new Date().toISOString(),
-      endTime: new Date().toISOString(),
-      coords: body.coordinates || null,
-      photos: body.photos || [],
-      note: body.notes || '',
-      order: { items: orderItems, total: orderTotal },
-      status: 'completed'
-    };
-    
-    db.visits.push(visit);
-    res.json(visit);
+    // Attach files to task
+    if (fileIds.length > 0) {
+      await callVibeCode('PATCH', '/tasks/' + taskId, {
+        ufTaskWebdavFiles: fileIds.map(id => 'n' + id)
+      });
+    }
+
+    res.json({ success: true, result: commentResponse.data.data });
   } catch (error) {
-    console.error('Create visit error:', error);
-    res.status(500).json({ error: 'Failed to create visit', message: error.message });
+    console.error('Error adding comment:', error.message);
+    if (req.files) {
+      req.files.forEach(file => {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      });
+    }
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/visits', (req, res) => {
-  res.json(db.visits);
+// Get product sections
+app.get('/api/sections', async (req, res) => {
+  try {
+    const response = await callVibeCode('GET', '/product-sections', { limit: 100 });
+    res.json({ result: response.data.data });
+  } catch (error) {
+    console.error('Error fetching sections:', error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.get('/api/visits/:id', (req, res) => {
-  const visit = db.visits.find(v => v.id == req.params.id);
-  if (!visit) return res.status(404).json({ error: 'Visit not found' });
-  res.json(visit);
+// Get products
+app.get('/api/products', async (req, res) => {
+  try {
+    const params = { limit: 100 };
+    if (req.query.sectionId) {
+      params.sectionId = req.query.sectionId;
+    }
+    const response = await callVibeCode('GET', '/products', params);
+    res.json({ result: response.data.data });
+  } catch (error) {
+    console.error('Error fetching products:', error.message);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.use('/uploads', express.static('uploads'));
+// Get current user
+app.get('/api/me', async (req, res) => {
+  try {
+    let response;
+    if (req.currentUser) {
+      response = await callVibeCode('GET', '/users/' + req.currentUser.id);
+    } else {
+      response = await callVibeCode('GET', '/users/me');
+    }
+    res.json({ data: { currentUser: response.data.data } });
+  } catch (error) {
+    console.error('Error fetching me:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Get user context
+app.get('/api/user-context', async (req, res) => {
+  try {
+    let user;
+    if (req.currentUser) {
+      const userResponse = await callVibeCode('GET', '/users/' + req.currentUser.id);
+      user = userResponse.data.data;
+    } else {
+      const userResponse = await callVibeCode('GET', '/users/me');
+      user = userResponse.data.data;
+    }
+    
+    const workgroupsResponse = await callVibeCode('GET', '/workgroups', { userId: user.id, limit: 50 });
+    const workgroups = workgroupsResponse.data.data || [];
+    
+    let departmentHead = null;
+    if (user.departmentId && user.departmentId.length > 0) {
+      const deptResponse = await callVibeCode('GET', '/departments/' + user.departmentId[0]);
+      const dept = deptResponse.data.data;
+      if (dept && dept.headId) {
+        const headResponse = await callVibeCode('GET', '/users/' + dept.headId);
+        departmentHead = headResponse.data.data;
+      }
+    }
+    
+    res.json({
+      user: user,
+      workgroups: workgroups,
+      departmentHead: departmentHead
+    });
+  } catch (error) {
+    console.error('Error fetching user context:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Logout - clear session and redirect to Black Hole logout
+app.post('/api/logout', (req, res) => {
+  res.json({ success: true, message: 'Logged out' });
+});
+
+// Serve static files
+app.use(express.static('public', {
+  maxAge: '1m',
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
+
+// Root route
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log('Server running on port ' + PORT);
+  console.log('Mobile Trade App running on port ' + PORT);
+  console.log('VibeCode API Key configured: ' + (VIBECODE_API_KEY ? 'YES' : 'NO'));
 });
+
+
+
+

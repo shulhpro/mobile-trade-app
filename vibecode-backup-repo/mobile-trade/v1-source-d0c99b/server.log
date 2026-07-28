@@ -1,0 +1,166 @@
+Mobile Trade App running on port 3000
+VibeCode API Key configured: NO
+No user in headers, using fallback
+VibeCode API error (/companies): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+API unavailable, using local data
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+VibeCode API error (/users/me): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error fetching user context: Request failed with status code 401
+VibeCode API error (/companies): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+API unavailable, using local data
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+VibeCode API error (/companies): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+API unavailable, using local data
+VibeCode API error (/users/me): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error fetching user context: Request failed with status code 401
+No user in headers, using fallback
+VibeCode API error (/tasks): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error fetching dashboard: Request failed with status code 401
+No user in headers, using fallback
+VibeCode API error (/tasks): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error fetching dashboard: Request failed with status code 401
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+VibeCode API error (/users/me): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error fetching user context: Request failed with status code 401
+VibeCode API error (/companies): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+API unavailable, using local data
+No user in headers, using fallback
+VibeCode API error (/tasks): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error finding task: Request failed with status code 401
+No user in headers, using fallback
+VibeCode API error (/product-sections): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error fetching sections: Request failed with status code 401
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+VibeCode API error (/users/me): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error fetching user context: Request failed with status code 401
+VibeCode API error (/companies): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+API unavailable, using local data
+No user in headers, using fallback
+No user in headers, using fallback
+VibeCode API error (/tasks): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error finding task: Request failed with status code 401
+No user in headers, using fallback
+VibeCode API error (/product-sections): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error fetching sections: Request failed with status code 401
+No user in headers, using fallback
+VibeCode API error (/tasks): {
+  success: false,
+  error: {
+    code: 'MISSING_API_KEY',
+    message: 'API key required. Pass via X-Api-Key header.'
+  }
+}
+Error finding task: Request failed with status code 401
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback
+No user in headers, using fallback

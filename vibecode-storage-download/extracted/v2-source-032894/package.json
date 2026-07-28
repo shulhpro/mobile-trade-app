@@ -1,0 +1,10 @@
+{
+  "name": "mobile-sfa-app",
+  "version": "1.0.0",
+  "description": "Мобильное приложение для торговых представителей",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {}
+}

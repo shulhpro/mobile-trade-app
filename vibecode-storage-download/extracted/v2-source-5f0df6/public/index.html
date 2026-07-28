@@ -1,0 +1,49 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobile Trade</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="manifest" href="/manifest.json">
+</head>
+<body>
+<div id="app">
+<div id="home-page" class="page active">
+<header class="app-header"><h1>Kompanii</h1></header>
+<div class="search-container"><input type="text" id="companySearch" placeholder="Poisk..."></div>
+<div id="companies-list"></div>
+</div>
+<div id="company-detail-page" class="page">
+<header class="app-header"><button class="btn-back" id="backToHome">&larr;</button><h1 id="detail-name">Company</h1></header>
+<div class="detail-content">
+<div class="info-card">
+<p><strong>Adres:</strong> <span id="detail-address"></span></p>
+<p><strong>Kontakt:</strong> <span id="detail-contact"></span></p>
+<p><strong>Telefon:</strong> <span id="detail-phone"></span></p>
+</div>
+<button class="btn btn-primary btn-large" id="startVisitBtn">Nachat vizit</button>
+</div>
+</div>
+<div id="visit-flow-page" class="page">
+<header class="app-header"><h1 id="visit-step-title">Shag 1: Koordinaty</h1><div class="step-indicator"><span id="current-step">1</span> / 4</div></header>
+<div id="step-location" class="step-content">
+<div class="step-card"><p>Opredelite koordinaty</p><div id="location-status" class="status-box">Ozhidanie...</div><button class="btn btn-primary" id="captureLocationBtn">Opredelit</button></div>
+</div>
+<div id="step-photo" class="step-content" style="display:none">
+<div class="step-card"><p>Foto</p><div id="photo-preview" class="preview-box"><span>Net foto</span></div><input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none"><button class="btn btn-primary" id="takePhotoBtn">Foto</button></div>
+</div>
+<div id="step-note" class="step-content" style="display:none">
+<div class="step-card"><p>Zametka</p><textarea id="visit-note" placeholder="Vvedite zametku..."></textarea></div>
+</div>
+<div id="step-order" class="step-content" style="display:none">
+<div class="step-card"><p>Zakaz</p><div id="order-items-list"></div><div class="order-summary"><span>Itogo:</span><span id="order-total-amount">0 rub</span></div><button class="btn btn-secondary" id="addItemBtn">+ Tovar</button></div>
+</div>
+<footer class="step-footer"><button id="prevStepBtn" class="btn btn-secondary" style="display:none">Nazad</button><button id="nextStepBtn" class="btn btn-primary">Dalee</button></footer>
+</div>
+<div id="item-modal" class="modal"><div class="modal-content"><h3>Tovar</h3><input type="text" id="item-name" placeholder="Nazvanie"><input type="number" id="item-price" placeholder="Cena" value="0"><input type="number" id="item-qty" placeholder="Kol-vo" value="1"><button id="saveItemBtn" class="btn btn-primary">Dobavit</button><button id="cancelItemBtn" class="btn btn-secondary">Otmena</button></div></div>
+<div id="toast-container"></div>
+</div>
+<script src="/js/app.js"></script>
+</body>
+</html>

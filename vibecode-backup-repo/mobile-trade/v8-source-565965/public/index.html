@@ -1,0 +1,194 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2c5aa0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Мобильная торговля</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Home Page -->
+        <div id="home-page" class="page active">
+            <header class="app-header">
+                <h1>Компании</h1>
+                <div class="header-actions">
+                    <button class="icon-btn" id="refreshBtn" title="Обновить">&#x21bb;</button>
+                </div>
+            </header>
+            <div class="search-container">
+                <div class="search-box">
+                    <span class="search-icon">&#x1F50D;</span>
+                    <input type="text" id="companySearch" placeholder="Поиск компаний..." autocomplete="off">
+                    <button class="clear-search" id="clearSearch" style="display:none">&#x2715;</button>
+                </div>
+            </div>
+            <div class="companies-list" id="companiesList">
+                <div class="loading">Загрузка...</div>
+            </div>
+        </div>
+
+        <!-- Company Detail Page -->
+        <div id="company-detail-page" class="page">
+            <header class="app-header">
+                <button class="btn-back" id="backToHome">&#x2190;</button>
+                <h1 id="detailName">Компания</h1>
+            </header>
+            <div class="detail-content">
+                <div class="company-card">
+                    <div class="company-icon">&#x1F3E2;</div>
+                    <div class="company-info">
+                        <h2 id="detailCompanyName"></h2>
+                        <p class="company-address" id="detailAddress"></p>
+                    </div>
+                </div>
+                <div class="info-section">
+                    <h3>Контактная информация</h3>
+                    <div class="info-item">
+                        <span class="info-label">Контактное лицо:</span>
+                        <span class="info-value" id="detailContact"></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Телефон:</span>
+                        <a class="info-value phone-link" id="detailPhone" href=""></a>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Email:</span>
+                        <a class="info-value email-link" id="detailEmail" href=""></a>
+                    </div>
+                </div>
+                <div class="action-section">
+                    <button class="btn btn-primary btn-large" id="startVisitBtn">
+                        <span class="btn-icon">&#x1F4CD;</span>
+                        Начать визит
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visit Flow Page -->
+        <div id="visit-flow-page" class="page">
+            <header class="app-header">
+                <button class="btn-back" id="backToDetail">&#x2190;</button>
+                <h1 id="visitStepTitle">Шаг 1: Координаты</h1>
+                <div class="step-indicator">
+                    <span id="currentStep">1</span> / 4
+                </div>
+            </header>
+            
+            <!-- Step 1: Location -->
+            <div id="step-location" class="step-content active">
+                <div class="step-card">
+                    <div class="step-icon">&#x1F4CD;</div>
+                    <h2>Определение координат</h2>
+                    <p>Нажмите кнопку для определения вашего местоположения</p>
+                    <div id="locationStatus" class="status-box">
+                        <span class="status-icon">&#x23F3;</span>
+                        <span class="status-text">Ожидание...</span>
+                    </div>
+                    <button class="btn btn-primary" id="captureLocationBtn">
+                        <span class="btn-icon">&#x1F4CD;</span>
+                        Определить местоположение
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Photo -->
+            <div id="step-photo" class="step-content">
+                <div class="step-card">
+                    <div class="step-icon">&#x1F4F8;</div>
+                    <h2>Фотоотчет</h2>
+                    <p>Сделайте фото торговой точки или товара</p>
+                    <div id="photoPreview" class="photo-preview">
+                        <div class="photo-placeholder">
+                            <span class="photo-icon">&#x1F4F7;</span>
+                            <span>Нет фото</span>
+                        </div>
+                    </div>
+                    <div class="photo-gallery" id="photoGallery"></div>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+                    <button class="btn btn-primary" id="takePhotoBtn">
+                        <span class="btn-icon">&#x1F4F8;</span>
+                        Сделать фото
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Note -->
+            <div id="step-note" class="step-content">
+                <div class="step-card">
+                    <div class="step-icon">&#x1F4DD;</div>
+                    <h2>Заметка</h2>
+                    <p>Добавьте заметку о визите</p>
+                    <textarea id="visitNote" placeholder="Введите заметку о визите..." rows="6"></textarea>
+                    <div class="note-hint">
+                        <span>&#x1F4A1;</span> Опишите состояние торговой точки, наличие товара, рекомендации
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Order -->
+            <div id="step-order" class="step-content">
+                <div class="step-card">
+                    <div class="step-icon">&#x1F6D2;</div>
+                    <h2>Заказ</h2>
+                    <p>Добавьте товары в заказ</p>
+                    
+                    <div class="products-list" id="productsList">
+                        <div class="loading">Загрузка товаров...</div>
+                    </div>
+                    
+                    <div class="order-summary-card">
+                        <div class="order-summary-row">
+                            <span>Итого позиций:</span>
+                            <span id="orderItemsCount">0</span>
+                        </div>
+                        <div class="order-summary-row total">
+                            <span>Общая сумма:</span>
+                            <span id="orderTotalAmount">0 ₽</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Footer -->
+            <footer class="step-footer">
+                <button id="prevStepBtn" class="btn btn-secondary" style="display:none">
+                    <span class="btn-icon">&#x2190;</span>
+                    Назад
+                </button>
+                <button id="nextStepBtn" class="btn btn-primary">
+                    Далее
+                    <span class="btn-icon">&#x2192;</span>
+                </button>
+            </footer>
+        </div>
+
+        <!-- Completion Modal -->
+        <div id="completionModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-icon">&#x2705;</div>
+                <h2>Визит завершен!</h2>
+                <p>Визит успешно сохранен. Создать задачу в Битрикс24?</p>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" id="skipTaskBtn">Пропустить</button>
+                    <button class="btn btn-primary" id="createTaskBtn">
+                        <span class="btn-icon">&#x1F4CB;</span>
+                        Создать задачу
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toastContainer"></div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

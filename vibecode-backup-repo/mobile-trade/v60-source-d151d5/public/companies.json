@@ -1,0 +1,42 @@
+[
+  {
+    "id": 5,
+    "title": "Test Company",
+    "address": null,
+    "phone": "",
+    "email": "",
+    "fm": []
+  },
+  {
+    "id": 16,
+    "title": "OOO Avto-terem",
+    "address": null,
+    "phone": "88122336244",
+    "email": "",
+    "fm": [{"typeId": "PHONE", "value": "88122336244"}]
+  },
+  {
+    "id": 18,
+    "title": "IP Sheftel",
+    "address": null,
+    "phone": "8(812)3500659",
+    "email": "",
+    "fm": [{"typeId": "PHONE", "value": "8(812)3500659"}]
+  },
+  {
+    "id": 20,
+    "title": "OOO PRIZMA",
+    "address": null,
+    "phone": "8(812)3226957",
+    "email": "",
+    "fm": [{"typeId": "PHONE", "value": "8(812)3226957"}]
+  },
+  {
+    "id": 22,
+    "title": "OOO AVTO DETALI",
+    "address": null,
+    "phone": "8(812)9470753",
+    "email": "avtodetalu@mail.ru",
+    "fm": [{"typeId": "PHONE", "value": "8(812)9470753"}, {"typeId": "EMAIL", "value": "avtodetalu@mail.ru"}]
+  }
+]

@@ -1,0 +1,228 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>Мобильная торговля</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=36">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="/_gw/icon">
+    <script>
+    // Extract token from URL (OAuth callback) and store in cookie
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      if (token) {
+        document.cookie = 'vibe_session=' + token + '; Path=/; Max-Age=86400; SameSite=Lax';
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    })();
+  </script>
+  <script src="js/auth.js"></script>
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <h1>🏭 Мобильная торговля</h1>
+      <div class="header-actions">
+        <button class="btn-refresh" onclick="clearCacheAndReload()" title="Обновить данные">
+          🔄
+        </button>
+        <div class="user-info" id="userInfo"></div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <!-- Start Screen -->
+      <section id="startScreen" class="screen active">
+        <div class="start-screen-content">
+          <div class="welcome-text">
+            <h2>Добро пожаловать</h2>
+            <p>Выберите действие</p>
+          </div>
+          
+          <div class="main-actions">
+            <button class="main-action-btn visits" onclick="showScreen('companyScreen')">
+              <span class="icon">🏢</span>
+              <span class="label">Визиты</span>
+              <span class="description">Начать визит к клиенту</span>
+            </button>
+            
+            <button class="main-action-btn tasks" onclick="loadTasks()">
+              <span class="icon">📋</span>
+              <span class="label">Задачи</span>
+              <span class="description">Мои текущие задачи</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Company Selection Screen -->
+      <section id="companyScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('startScreen')">&lt; Назад</button>
+        <h2>Выбор компании</h2>
+        <div class="search-box">
+          <input type="text" id="companySearch" placeholder="🔍 Поиск компании...">
+        </div>
+        <div class="companies-list" id="companiesList">
+          <div class="loading">Загрузка компаний...</div>
+        </div>
+      </section>
+
+      <!-- Company Detail Screen -->
+      <section id="companyDetailScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('companyScreen')">&lt; Назад к списку</button>
+        <div class="company-card" id="companyCard"></div>
+        
+        <div class="actions-grid">
+          <button class="action-btn visit" onclick="showVisitForm()">
+            <span class="icon">📝</span>
+            <span class="label">Визит /<br>Коммерческий визит</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Tasks Screen -->
+      <section id="tasksScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('startScreen')">&lt; Назад</button>
+        <h2>Мои задачи</h2>
+        <div class="tasks-filter">
+          <button class="filter-btn active" onclick="filterTasks('all')">Все</button>
+          <button class="filter-btn" onclick="filterTasks('open')">Открытые</button>
+          <button class="filter-btn" onclick="filterTasks('closed')">Завершенные</button>
+        </div>
+        <div class="tasks-list" id="tasksList">
+          <div class="loading">Загрузка задач...</div>
+        </div>
+      </section>
+
+      <!-- Task Detail Screen -->
+      <section id="taskDetailScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('tasksScreen')">&lt; Назад к задачам</button>
+        <div class="task-detail-scroll">
+          <div class="task-detail" id="taskDetail"></div>
+          
+          <!-- Comment Section -->
+          <div class="task-comment-section" id="taskCommentSection" style="display: none;">
+            <div class="form-section">
+              <h3>💬 Комментарий</h3>
+              <textarea id="taskCommentText" rows="3" placeholder="Введите комментарий..."></textarea>
+            </div>
+            
+            <!-- File Upload -->
+            <div class="form-section">
+              <h3>📎 Файлы</h3>
+              <input type="file" id="taskFileInput" multiple>
+              <div id="taskFilePreview" class="file-preview"></div>
+            </div>
+            
+            <button class="btn-save-comment" onclick="addCommentWithFiles()">Отправить комментарий</button>
+          </div>
+        </div>
+        
+        <!-- Bottom Complete Button -->
+        <div class="task-complete-bottom" id="taskCompleteBottom"></div>
+      </section>
+
+      <!-- Unified Visit Form -->
+      <section id="visitFormScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('companyDetailScreen')">&lt; Назад</button>
+        <h2>Визит к клиенту</h2>
+        <form id="visitForm" class="action-form">
+          <div class="form-group">
+            <label>Компания</label>
+            <div id="visitCompanyName" class="company-name-display"></div>
+          </div>
+
+          <!-- Location Section -->
+          <div class="form-section">
+            <h3>Геолокация</h3>
+            <button type="button" class="btn-location" onclick="getLocation()">
+              Получить координаты
+            </button>
+            <div id="locationDisplay" class="location-display"></div>
+          </div>
+
+          <!-- Photos Section -->
+          <div class="form-section">
+            <h3>Фотографии</h3>
+            <input type="file" id="photoInput" accept="image/*" multiple capture="environment">
+            <div id="photoPreview" class="photo-preview"></div>
+          </div>
+
+          <!-- Notes Section -->
+          <div class="form-section">
+            <h3>Заметки</h3>
+            <textarea id="noteText" rows="4" placeholder="Ваши заметки по визиту..."></textarea>
+          </div>
+
+          <!-- Order Section -->
+          <div class="form-section">
+            <h3>Заказ</h3>
+            
+            <div id="sectionsList" class="sections-list">
+              <div class="loading">Загрузка разделов...</div>
+            </div>
+            
+            <div id="productsList" class="products-list" style="display: none;">
+              <button type="button" class="btn-back-sections" onclick="showSections()">&lt; Назад к разделам</button>
+              <div id="productsContainer"></div>
+            </div>
+            
+            <div class="order-summary">
+              <div class="total">Итого: <span id="orderTotal">0</span> ₽</div>
+            </div>
+          </div>
+
+          <!-- Comment Section -->
+          <div class="form-section">
+            <h3>Комментарий к задаче</h3>
+            <textarea id="visitComment" rows="3" placeholder="Комментарий к задаче в Битрикс..."></textarea>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="form-actions">
+            <button type="button" class="btn-save" onclick="submitVisit(false)">
+              Сохранить визит
+            </button>
+            <button type="button" class="btn-close" onclick="submitVisit(true)">
+              Завершить визит
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Success Screen -->
+      <section id="successScreen" class="screen">
+        <div class="success-message">
+          <div class="success-icon">✓</div>
+          <h2 id="successTitle">Успешно!</h2>
+          <p id="successMessage">Данные сохранены</p>
+          <button class="btn-submit" onclick="showScreen('startScreen')">На главную</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <div class="loading-text">Сохранение визита...</div>
+      </div>
+    </div>
+  <script src="js/app.js?v=36"></script>
+</body>
+</html>
+
+
+
+

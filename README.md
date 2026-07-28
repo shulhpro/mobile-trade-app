@@ -13,12 +13,14 @@
 - 📸 **Фотоотчеты** — прикрепление фотографий к визиту
 - 📝 **Заметки** — текстовые заметки по результатам встречи
 - 🛒 **Заказы** — оформление заказа с выбором товаров из каталога
-- ✅ **Задачи в Битрикс24** — автоматическое создание задач по визиту
+- ✅ **Задачи в Битрикс24** — просмотр и завершение задач
 - 🎨 **Премиальный дизайн** — темная тема в стиле Industrial Premium
+- 🔐 **Авторизация через Bitrix24** — вход через Black Hole Gateway
+- 🚪 **Выход из сессии** — полный logout с очисткой всех данных
 
 ## 🚀 Быстрый старт
 
-```bash
+`ash
 # Установка зависимостей
 npm install
 
@@ -26,37 +28,99 @@ npm install
 npm start
 
 # Приложение будет доступно на http://localhost:3000
-```
+`
+
+## 🔧 Переменные окружения
+
+Создайте файл .env:
+
+`env
+# VibeCode API Key (обязательно)
+VIBECODE_API_KEY=vibe_api_...
+
+# OAuth App Key (для мультипользовательской авторизации)
+VIBECODE_APP_KEY=vibe_app_local_...
+
+# URL приложения (опционально)
+APP_URL=https://app-116f18205548.vibecode.bitrix24.tech
+
+# Порт (опционально, по умолчанию 3000)
+PORT=3000
+`
 
 ## 🏗 Архитектура
 
-```
+`
 📦 mobile-trade-app
 ├── 📁 public/
 │   ├── 📄 index.html          # Главная страница
 │   ├── 📁 css/
-│   │   └── 🎨 style.css       # Стили (Dark Premium)
+│   │   └── 🎨 style.css       # Стили (Dark Premium Industrial)
 │   ├── 📁 js/
 │   │   └── ⚡ app.js          # Логика фронтенда
 │   ├── 📄 manifest.json       # PWA манифест
 │   └── 📄 sw.js               # Service Worker
 ├── 📄 server.js               # Express сервер
 ├── 📄 package.json            # Зависимости
-└── 📄 .env                    # Конфигурация API
-```
+├── 📄 .env                    # Конфигурация API
+├── 📄 API.md                  # Документация API
+└── 📄 README.md               # Этот файл
+`
 
-## 🔧 Технологии
+## 🔐 Авторизация
 
-- **Backend:** Node.js + Express
+Приложение использует **Black Hole Gateway** для авторизации через Bitrix24:
+
+1. Пользователь открывает приложение по ссылке
+2. Black Hole Gateway перенаправляет на Bitrix24 OAuth
+3. После успешной авторизации Gateway инжектирует заголовки:
+   - X-Vibe-User-Id — ID пользователя
+   - X-Vibe-Portal-Id — ID портала
+4. Сервер извлекает userId из заголовков и работает от имени пользователя
+
+### Выход из сессии
+
+Нажмите кнопку 🚪 в шапке приложения. Происходит:
+1. Очистка серверной сессии
+2. Очистка localStorage и sessionStorage
+3. Удаление всех cookies
+4. Очистка кэша приложения
+5. Отмена регистрации Service Worker
+6. Перенаправление на /_gw/logout (страница входа)
+
+## 🛠 Технологии
+
+- **Backend:** Node.js + Express + Axios
 - **Frontend:** Vanilla JavaScript (ES6+)
-- **Styling:** CSS3 с CSS Variables
-- **API:** Bitrix24 REST API
+- **Styling:** CSS3 с CSS Variables (Dark Premium Industrial)
+- **API:** VibeCode REST API (Bitrix24)
+- **Auth:** Black Hole Gateway + Bitrix24 OAuth
 - **Deploy:** VibeCode Platform
+
+## 📡 API Endpoints
+
+| Endpoint | Метод | Описание |
+|----------|-------|----------|
+| /health | GET | Проверка работоспособности |
+| /api/companies | GET | Список компаний |
+| /api/sections | GET | Разделы каталога |
+| /api/products | GET | Товары |
+| /api/tasks | GET | Все задачи |
+| /api/my-tasks | GET | Мои задачи |
+| /api/tasks/:id | GET | Детали задачи |
+| /api/tasks/:id/complete | POST | Завершить задачу |
+| /api/tasks/:id/comment | POST | Комментарий с файлами |
+| /api/visit | POST | Создать визит |
+| /api/me | GET | Текущий пользователь |
+| /api/user-context | GET | Контекст пользователя |
+| /api/logout | POST | Выход из сессии |
+
+Подробная документация в [API.md](API.md)
 
 ## 🌐 Демо
 
 🔗 [Открыть приложение](https://app-116f18205548.vibecode.bitrix24.tech)
 
-## 📄 Лицензия
+## 📝 Лицензия
 
 MIT © 2026

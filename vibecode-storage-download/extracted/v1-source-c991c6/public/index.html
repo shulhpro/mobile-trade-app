@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2c5aa0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Мобильная торговля">
+  <title>Мобильная торговля</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <h1>Мобильная торговля</h1>
+      <div class="connection-status" id="connectionStatus">
+        <span class="status-indicator online"></span>
+        <span class="status-text">Онлайн</span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <!-- Navigation -->
+      <nav class="app-nav" id="mainNav">
+        <button class="nav-btn active" data-page="visits">
+          <span class="nav-icon">📍</span>
+          <span class="nav-label">Визиты</span>
+        </button>
+        <button class="nav-btn" data-page="orders">
+          <span class="nav-icon">📋</span>
+          <span class="nav-label">Заказы</span>
+        </button>
+        <button class="nav-btn" data-page="history">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">История</span>
+        </button>
+      </nav>
+
+      <!-- Visits Page -->
+      <section class="page active" id="visitsPage">
+        <div class="page-header">
+          <h2>Текущие визиты</h2>
+          <button class="btn btn-primary" id="newVisitBtn">+ Новый визит</button>
+        </div>
+        
+        <div class="visits-list" id="visitsList">
+          <!-- Visits will be loaded here -->
+        </div>
+      </section>
+
+      <!-- New Visit Modal -->
+      <div class="modal" id="newVisitModal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Новый визит</h3>
+            <button class="modal-close" id="closeNewVisit">&times;</button>
+          </div>
+          <form class="visit-form" id="visitForm">
+            <div class="form-group">
+              <label for="companyName">Название компании *</label>
+              <input type="text" id="companyName" name="companyName" required placeholder="Введите название компании">
+            </div>
+            <div class="form-group">
+              <label for="contactPerson">Контактное лицо</label>
+              <input type="text" id="contactPerson" name="contactPerson" placeholder="ФИО контактного лица">
+            </div>
+            <div class="form-group">
+              <label for="address">Адрес</label>
+              <input type="text" id="address" name="address" placeholder="Адрес компании">
+            </div>
+            <div class="form-group">
+              <label>Геолокация</label>
+              <div class="location-display" id="locationDisplay">
+                <button type="button" class="btn btn-secondary" id="getLocationBtn">
+                  📍 Определить координаты
+                </button>
+                <div class="coordinates" id="coordinates"></div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" id="cancelVisit">Отмена</button>
+              <button type="submit" class="btn btn-primary">Начать визит</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Active Visit Page -->
+      <section class="page" id="activeVisitPage">
+        <div class="visit-header">
+          <button class="btn btn-icon" id="backToVisits">←</button>
+          <h2 id="activeVisitCompany">Компания</h2>
+          <span class="visit-status active">Активен</span>
+        </div>
+        
+        <div class="visit-actions">
+          <button class="action-btn" id="photoBtn">
+            <span class="action-icon">📷</span>
+            <span class="action-label">Фото</span>
+          </button>
+          <button class="action-btn" id="noteBtn">
+            <span class="action-icon">📝</span>
+            <span class="action-label">Заметка</span>
+          </button>
+          <button class="action-btn" id="orderBtn">
+            <span class="action-icon">📦</span>
+            <span class="action-label">Заказ</span>
+          </button>
+          <button class="action-btn" id="checkoutBtn">
+            <span class="action-icon">✅</span>
+            <span class="action-label">Завершить</span>
+          </button>
+        </div>
+
+        <div class="visit-content">
+          <!-- Photos Section -->
+          <div class="section" id="photosSection">
+            <h3>Фотоотчет</h3>
+            <div class="photos-grid" id="photosGrid"></div>
+            <input type="file" id="photoInput" accept="image/*" capture="environment" style="display: none;">
+          </div>
+
+          <!-- Notes Section -->
+          <div class="section" id="notesSection">
+            <h3>Заметки</h3>
+            <div class="notes-list" id="notesList"></div>
+            <div class="note-input-group">
+              <textarea id="noteText" placeholder="Введите заметку..."></textarea>
+              <button class="btn btn-primary" id="addNoteBtn">Добавить</button>
+            </div>
+          </div>
+
+          <!-- Order Section -->
+          <div class="section" id="orderSection">
+            <h3>Заказ</h3>
+            <div class="order-items" id="orderItems"></div>
+            <div class="order-total">
+              <span>Итого:</span>
+              <span id="orderTotal">0 ₽</span>
+            </div>
+            <button class="btn btn-secondary" id="addOrderItemBtn">+ Добавить товар</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Orders Page -->
+      <section class="page" id="ordersPage">
+        <div class="page-header">
+          <h2>Заказы</h2>
+        </div>
+        <div class="orders-list" id="ordersList"></div>
+      </section>
+
+      <!-- History Page -->
+      <section class="page" id="historyPage">
+        <div class="page-header">
+          <h2>История визитов</h2>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </section>
+    </main>
+
+    <!-- Add Order Item Modal -->
+    <div class="modal" id="orderItemModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Добавить товар</h3>
+          <button class="modal-close" id="closeOrderItem">&times;</button>
+        </div>
+        <form class="order-item-form" id="orderItemForm">
+          <div class="form-group">
+            <label for="productName">Название товара *</label>
+            <input type="text" id="productName" name="productName" required placeholder="Название товара">
+          </div>
+          <div class="form-group">
+            <label for="productQuantity">Количество *</label>
+            <input type="number" id="productQuantity" name="productQuantity" required min="1" value="1">
+          </div>
+          <div class="form-group">
+            <label for="productPrice">Цена за единицу (₽) *</label>
+            <input type="number" id="productPrice" name="productPrice" required min="0" step="0.01" placeholder="0.00">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="cancelOrderItem">Отмена</button>
+            <button type="submit" class="btn btn-primary">Добавить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Checkout Confirmation Modal -->
+    <div class="modal" id="checkoutModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Завершить визит</h3>
+        </div>
+        <div class="modal-body">
+          <p>Вы уверены, что хотите завершить визит?</p>
+          <p>По завершению будет создана задача в Битрикс24.</p>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" id="cancelCheckout">Отмена</button>
+          <button class="btn btn-primary" id="confirmCheckout">Завершить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+  </div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            console.log('SW registered:', registration.scope);
+          })
+          .catch((error) => {
+            console.log('SW registration failed:', error);
+          });
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Мобильная торговля</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192x192.png">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-content">
+        <h1 class="app-title">📱 Мобильная торговля</h1>
+        <div class="header-actions">
+          <button id="dashboardBtn" class="icon-btn" title="Аналитика">📊</button>
+          <button id="refreshBtn" class="icon-btn" title="Обновить">🔄</button>
+        </div>
+      </div>
+      <div id="userInfo" class="user-info"></div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Loading Screen -->
+      <div id="loadingScreen" class="screen active">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Загрузка...</p>
+      </div>
+
+      <!-- Client Selection Screen -->
+      <div id="clientScreen" class="screen">
+        <div class="screen-header">
+          <h2>Выбор клиента</h2>
+          <div class="search-box">
+            <input type="text" id="clientSearch" placeholder="🔍 Поиск по названию...">
+          </div>
+        </div>
+        <div id="companiesList" class="companies-list"></div>
+      </div>
+
+      <!-- Visit Form Screen -->
+      <div id="visitScreen" class="screen">
+        <div class="screen-header">
+          <button id="backToClients" class="back-btn">← Назад</button>
+          <h2 id="visitTitle">Визит</h2>
+        </div>
+        
+        <div class="visit-form">
+          <!-- GPS Coordinates -->
+          <div class="form-section">
+            <h3>📍 Местоположение</h3>
+            <button id="getLocationBtn" class="action-btn primary">Определить координаты</button>
+            <div id="locationDisplay" class="location-display"></div>
+          </div>
+
+          <!-- Photos -->
+          <div class="form-section">
+            <h3>📸 Фото</h3>
+            <input type="file" id="photoInput" accept="image/*" multiple capture="environment" class="hidden">
+            <button id="addPhotoBtn" class="action-btn secondary">Добавить фото</button>
+            <div id="photosPreview" class="photos-preview"></div>
+          </div>
+
+          <!-- Notes -->
+          <div class="form-section">
+            <h3>📝 Заметки</h3>
+            <textarea id="notesInput" placeholder="Введите заметки по визиту..." rows="4"></textarea>
+          </div>
+
+          <!-- Order -->
+          <div class="form-section">
+            <h3>📦 Заказ</h3>
+            <button id="addOrderBtn" class="action-btn secondary">Добавить товары</button>
+            <div id="orderDisplay" class="order-display"></div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="form-actions">
+            <button id="saveVisitBtn" class="action-btn primary large">💾 Сохранить</button>
+            <button id="completeVisitBtn" class="action-btn success large">✅ Завершить визит</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product Selection Screen -->
+      <div id="productsScreen" class="screen">
+        <div class="screen-header">
+          <button id="backToVisit" class="back-btn">← Назад к визиту</button>
+          <h2>Выбор товаров</h2>
+        </div>
+        
+        <div id="sectionsView" class="sections-view">
+          <h3>Разделы каталога</h3>
+          <div id="sectionsList" class="sections-list"></div>
+        </div>
+        
+        <div id="productsView" class="products-view hidden">
+          <button id="backToSections" class="back-btn">← Назад к разделам</button>
+          <h3 id="sectionTitle">Товары</h3>
+          <div id="productsList" class="products-list"></div>
+        </div>
+        
+        <div id="orderSummary" class="order-summary">
+          <div class="order-total">
+            <span>Итого:</span>
+            <span id="orderTotal">0 ₽</span>
+          </div>
+          <button id="confirmOrderBtn" class="action-btn primary">Подтвердить заказ</button>
+        </div>
+      </div>
+
+      <!-- Dashboard Screen -->
+      <div id="dashboardScreen" class="screen">
+        <div class="screen-header">
+          <button id="backFromDashboard" class="back-btn">← Назад</button>
+          <h2>📊 Аналитика</h2>
+        </div>
+        
+        <div class="dashboard-filters">
+          <div class="filter-group">
+            <label>С:</label>
+            <input type="date" id="dateFrom">
+          </div>
+          <div class="filter-group">
+            <label>По:</label>
+            <input type="date" id="dateTo">
+          </div>
+          <button id="applyFilterBtn" class="action-btn primary">Применить</button>
+        </div>
+        
+        <div class="dashboard-stats">
+          <div class="stat-card">
+            <div class="stat-icon">🚶</div>
+            <div class="stat-value" id="statVisits">0</div>
+            <div class="stat-label">Визитов</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📦</div>
+            <div class="stat-value" id="statOrders">0</div>
+            <div class="stat-label">Заказов</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-value" id="statRevenue">0 ₽</div>
+            <div class="stat-label">Выручка</div>
+          </div>
+        </div>
+        
+        <div class="dashboard-tables">
+          <div class="table-section">
+            <h3>По сотрудникам</h3>
+            <div id="employeeTable" class="data-table"></div>
+          </div>
+          
+          <div class="table-section">
+            <h3>По клиентам</h3>
+            <div id="clientTable" class="data-table"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="loading-spinner"></div>
+        <p id="loadingText">Сохранение...</p>
+      </div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification hidden"></div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
