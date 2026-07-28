@@ -15,7 +15,6 @@ function isAuthenticated() {
   const expires = localStorage.getItem(AUTH_EXPIRES_KEY);
   if (!token) return false;
   if (expires && new Date(expires) < new Date()) {
-    // Token expired
     clearAuth();
     return false;
   }
@@ -48,17 +47,34 @@ async function fetchWithAuth(url, options = {}) {
 // Check auth status on app load
 async function checkAuth() {
   try {
-    const response = await fetchWithAuth('/api/auth/status');
-    const data = await response.json();
+    // Try to get user session - if user is authenticated via Bitrix24,
+    // Gateway will automatically add X-Vibe-Authorization header
+    const response = await fetch('/api/session');
     
-    if (data.authenticated) {
-      console.log('User authenticated');
-      return true;
-    } else {
-      console.log('User not authenticated, showing login');
-      showLoginScreen();
-      return false;
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.user) {
+        console.log('User authenticated via Bitrix24');
+        window.currentUser = data.user;
+        return true;
+      }
     }
+    
+    // If /api/session failed, try with stored token
+    const token = getAuthToken();
+    if (token) {
+      const response2 = await fetchWithAuth('/api/session');
+      const data2 = await response2.json();
+      if (data2.success && data2.user) {
+        console.log('User authenticated via stored token');
+        window.currentUser = data2.user;
+        return true;
+      }
+    }
+    
+    console.log('User not authenticated, showing login');
+    showLoginScreen();
+    return false;
   } catch (error) {
     console.error('Auth check failed:', error);
     showLoginScreen();
@@ -86,7 +102,6 @@ function showLoginScreen() {
 
 // Start OAuth flow
 function startOAuth() {
-  // Redirect to OAuth login
   window.location.href = '/api/auth/login';
 }
 
@@ -105,9 +120,7 @@ async function handleOAuthCallback() {
   
   if (token) {
     setAuthToken(token);
-    // Remove token from URL
     window.history.replaceState({}, document.title, window.location.pathname);
-    // Reload app
     window.location.reload();
   }
 }
@@ -120,7 +133,6 @@ function logout() {
 
 // Initialize auth on page load
 document.addEventListener('DOMContentLoaded', function() {
-  // Check if this is OAuth callback
   if (window.location.search.includes('token=') || window.location.search.includes('error=')) {
     handleOAuthCallback();
   } else {
