@@ -1535,3 +1535,76 @@ textarea::placeholder {
   margin: 0;
 }
 
+
+/* ===== GEOLOCATION HELP MODAL ===== */
+.geo-help-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  animation: fadeIn 0.2s ease;
+}
+
+.geo-help-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 0.3s ease;
+}
+
+.geo-help-content h3 {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0 0 16px 0;
+  text-align: center;
+}
+
+.geo-help-content pre {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: 16px;
+  border-radius: var(--radius);
+  margin: 0 0 20px 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  border: 1px solid var(--border-subtle);
+}
+
+.geo-help-content .btn-primary {
+  width: 100%;
+  margin: 0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

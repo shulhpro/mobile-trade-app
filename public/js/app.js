@@ -233,32 +233,102 @@ function showVisitForm() {
   loadProductsForOrder();
 }
 
-function getLocation() {
+async function requestGeolocationPermission() {
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const result = await navigator.permissions.query({ name: 'geolocation' });
+      return result.state;
+    } catch (e) {
+      console.log('Permissions API not supported');
+    }
+  }
+  return 'unknown';
+}
+
+function showGeolocationHelp(error) {
+  let message = '';
+  let title = 'Геолокация недоступна';
+  
+  switch(error.code) {
+    case error.PERMISSION_DENIED:
+      title = 'Доступ к геолокации запрещён';
+      message = 'Для работы с визитами необходимо разрешить доступ к местоположению.\n\n' +
+                'iPhone / iPad:\n' +
+                '1. Откройте Настройки → Конфиденциальность → Службы геолокации\n' +
+                '2. Найдите Safari или это приложение\n' +
+                '3. Выберите «При использовании приложения»\n\n' +
+                'Или в Safari:\n' +
+                'Настройки → Safari → Геолокация → Разрешить';
+      break;
+    case error.POSITION_UNAVAILABLE:
+      message = 'Не удалось определить местоположение. Проверьте:\n' +
+                '• Включены ли службы геолокации\n' +
+                '• Есть ли GPS-сигнал\n' +
+                '• Включён ли Wi-Fi';
+      break;
+    case error.TIMEOUT:
+      message = 'Превышено время ожидания. Попробуйте:\n' +
+                '• Выйти на открытое пространство\n' +
+                '• Включить Wi-Fi\n' +
+                '• Повторить попытку';
+      break;
+    default:
+      message = 'Неизвестная ошибка геолокации';
+  }
+  
+  const modal = document.createElement('div');
+  modal.className = 'geo-help-modal';
+  modal.innerHTML = `
+    <div class="geo-help-content">
+      <h3>${title}</h3>
+      <pre>${message}</pre>
+      <button onclick="this.closest('.geo-help-modal').remove()" class="btn-primary">Понятно</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+async function getLocation() {
   if (!navigator.geolocation) {
-    showToast('Геолокация не поддерживается');
+    showToast('Геолокация не поддерживается этим устройством');
     return;
   }
   
+  const permissionState = await requestGeolocationPermission();
+  console.log('Geolocation permission state:', permissionState);
+  
   const btn = document.querySelector('.btn-location');
+  const originalText = btn.textContent;
   btn.textContent = '⏳ Определение...';
+  btn.disabled = true;
   
   navigator.geolocation.getCurrentPosition(
     (position) => {
       currentLocation = {
         latitude: position.coords.latitude,
-        longitude: position.coords.longitude
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        timestamp: position.timestamp
       };
       
       const display = document.getElementById('locationDisplay');
-      display.innerHTML = '✅ Местоположение определено<br>Широта: ' + currentLocation.latitude.toFixed(6) + '<br>Долгота: ' + currentLocation.longitude.toFixed(6);
+      display.innerHTML = '✅ Местоположение определено<br>Широта: ' + currentLocation.latitude.toFixed(6) + '<br>Долгота: ' + currentLocation.longitude.toFixed(6) + '<br>Точность: ±' + Math.round(currentLocation.accuracy) + 'м';
       display.classList.add('active');
       btn.textContent = 'Обновить местоположение';
+      btn.disabled = false;
+      showToast('Местоположение определено');
     },
     (error) => {
-      showToast('Ошибка определения местоположения');
-      btn.textContent = 'Определить местоположение';
+      console.error('Geolocation error:', error.code, error.message);
+      showGeolocationHelp(error);
+      btn.textContent = originalText;
+      btn.disabled = false;
     },
-    { enableHighAccuracy: true, timeout: 10000 }
+    { 
+      enableHighAccuracy: true, 
+      timeout: 15000,
+      maximumAge: 0
+    }
   );
 }
 
@@ -852,6 +922,7 @@ async function logout() {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(console.error);
 }
+
 
 
 

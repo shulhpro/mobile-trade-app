@@ -1,8 +1,8 @@
-﻿const CACHE_NAME = 'mobile-trade-v1';
+﻿const CACHE_NAME = 'mobile-trade-v2';
 const urlsToCache = [
   '/',
-  '/css/style.css',
-  '/js/app.js',
+  '/css/style.css?v=36',
+  '/js/app.js?v=36',
   '/manifest.json'
 ];
 
