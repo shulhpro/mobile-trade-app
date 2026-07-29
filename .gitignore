@@ -30,3 +30,8 @@ server.js.backup
 # VibeCode storage (large)
 vibecode-storage-download/
 vibecode-backup-repo/
+
+.env
+
+git/
+mingit.zip
