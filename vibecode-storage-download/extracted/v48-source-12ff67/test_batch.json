@@ -1,1 +1,0 @@
-﻿{\"halt\":0,\"cmd\":{\"get_tasks\":\"tasks.task.list?FILTER[RESPONSIBLE_ID]=10&ORDER[ID]=DESC&LIMIT=5\"}}
