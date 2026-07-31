@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const axios = require('axios');
 const multer = require('multer');
 const fs = require('fs');
@@ -37,7 +37,9 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+// Настройка JSON с правильной кодировкой
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Multer for file uploads
 const storage = multer.diskStorage({
@@ -49,20 +51,26 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
+    // Обработка имени файла с правильной кодировкой
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    cb(null, Date.now() + '-' + originalName);
   }
 });
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
 
 // VibeCode API helper
 async function callVibeCode(method, endpoint, data = null, isFormData = false) {
   const url = VIBECODE_BASE_URL + endpoint;
   const headers = {
-    'Authorization': 'Bearer ' + VIBECODE_API_KEY
+    'Authorization': 'Bearer ' + VIBECODE_API_KEY,
+    'Accept': 'application/json'
   };
   
   if (!isFormData) {
-    headers['Content-Type'] = 'application/json';
+    headers['Content-Type'] = 'application/json; charset=utf-8';
   }
   
   try {
@@ -102,7 +110,8 @@ async function findOpenTaskForCompany(companyId) {
 // Get companies
 app.get('/api/companies', async (req, res) => {
   try {
-    const response = await callVibeCode('GET', '/companies', { limit: 100 });
+    const limit = parseInt(req.query.limit) || 1000;
+    const response = await callVibeCode('GET', '/companies', { limit: limit });
     res.json({ result: response.data.data, total: response.data.meta?.total });
   } catch (error) {
     console.log('API unavailable, using local data');
@@ -127,6 +136,25 @@ app.get('/api/companies/:id', async (req, res) => {
   }
 });
 
+// Search companies
+app.get('/api/companies/search', async (req, res) => {
+  try {
+    const query = req.query.q || '';
+    if (query.length < 2) {
+      return res.json({ result: [], total: 0 });
+    }
+    
+    const response = await callVibeCode('GET', '/companies', { 
+      limit: 100,
+      'filter[search]': query
+    });
+    res.json({ result: response.data.data || [], total: response.data.meta?.total || 0 });
+  } catch (error) {
+    console.error('Error searching companies:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Process visit
 app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
   try {
@@ -143,7 +171,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     
     if (!task) {
       companyResponse = await callVibeCode('GET', '/companies/' + companyId);
-      const companyName = companyResponse.data.data?.title || 'РљР»РёРµРЅС‚';
+      const companyName = companyResponse.data.data?.title || 'Клиент';
       
       try {
         const userResponse = await callVibeCode('GET', '/users/me');
@@ -160,8 +188,8 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
       }
       
       const taskData = {
-        title: subject || 'Р’РёР·РёС‚ Рє ' + companyName,
-        description: 'РќР°С‡Р°Р»Рѕ РІРёР·РёС‚Р°\n',
+        title: subject || 'Визит к ' + companyName,
+        description: 'Начало визита\n',
         responsibleId: req.currentUser ? req.currentUser.id : 10,
         ufCrmTask: ['CO_' + companyId],
         status: 2
@@ -193,38 +221,38 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     newContent += '=== ' + now + ' ===\n\n';
     
     if (type === 'visit' || location) {
-      newContent += 'рџ“Ќ РџРѕСЃРµС‰РµРЅРёРµ РєР»РёРµРЅС‚Р°\n';
+      newContent += '📍 Посещение клиента\n';
       newContent += (description || '') + '\n';
       if (location) {
         const loc = JSON.parse(location);
-        newContent += '\nрџ“Ќ РљРѕРѕСЂРґРёРЅР°С‚С‹: ' + loc.latitude + ', ' + loc.longitude + '\n';
+        newContent += '\n📍 Координаты: ' + loc.latitude + ', ' + loc.longitude + '\n';
       }
       newContent += '\n---\n\n';
     }
     
     if (type === 'photo' || files.length > 0) {
-      newContent += 'рџ“ё Р¤РѕС‚РѕРѕС‚С‡РµС‚\n';
+      newContent += '📸 Фотоотчет\n';
       newContent += (description || '') + '\n';
       newContent += '\n---\n\n';
     }
     
     if (type === 'note' || noteText) {
-      newContent += 'рџ“ќ Р—Р°РјРµС‚РєР°\n';
+      newContent += '📝 Заметка\n';
       newContent += (noteText || description || '') + '\n';
       newContent += '\n---\n\n';
     }
     
     if (type === 'order' || orderData) {
-      newContent += 'рџ“¦ Р—РђРљРђР—\n';
+      newContent += '📦 ЗАКАЗ\n';
       newContent += (description || '') + '\n';
       if (orderData) {
         const orderItems = JSON.parse(orderData);
         if (orderItems.items && orderItems.items.length > 0) {
-          newContent += '\nрџ“‹ РЎРїРёСЃРѕРє С‚РѕРІР°СЂРѕРІ:\n';
+          newContent += '\n📋 Список товаров:\n';
           orderItems.items.forEach((item, idx) => {
-            newContent += (idx + 1) + '. ' + item.name + ' вЂ” ' + item.quantity + ' С€С‚. Г— ' + item.price + ' в‚Ѕ = ' + (item.quantity * item.price) + ' в‚Ѕ\n';
+            newContent += (idx + 1) + '. ' + item.name + ' — ' + item.quantity + ' шт. × ' + item.price + ' ₽ = ' + (item.quantity * item.price) + ' ₽\n';
           });
-          newContent += '\nрџ’° РС‚РѕРіРѕ: ' + orderItems.total + ' в‚Ѕ\n';
+          newContent += '\n💰 Итого: ' + orderItems.total + ' ₽\n';
         }
       }
       newContent += '\n---\n\n';
@@ -259,7 +287,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
     }
     
     if (uploadedFiles.length > 0) {
-      newContent += 'рџ“Ћ РџСЂРёРєСЂРµРїР»РµРЅРЅС‹Рµ С„Р°Р№Р»С‹:\n';
+      newContent += '📎 Прикрепленные файлы:\n';
       uploadedFiles.forEach((file, idx) => {
         newContent += (idx + 1) + '. ' + file.name + '\n';
       });
@@ -287,7 +315,8 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
       await axios.post(VIBECODE_BASE_URL + '/batch', batchBody, {
         headers: {
           'Authorization': 'Bearer ' + VIBECODE_API_KEY,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json; charset=utf-8',
+          'Accept': 'application/json'
         }
       });
     } else {
@@ -301,19 +330,19 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
       try {
         const orderItems = JSON.parse(orderData);
         if (orderItems.items && orderItems.items.length > 0) {
-          let orderDescription = 'рџ“¦ Р—Р°РєР°Р· РєР»РёРµРЅС‚Р°\n\n';
-          orderDescription += '| в„– | РќР°РёРјРµРЅРѕРІР°РЅРёРµ | РљРѕР»-РІРѕ | Р¦РµРЅР° | РЎСѓРјРјР° |\n';
+          let orderDescription = '📦 Заказ клиента\n\n';
+          orderDescription += '| № | Наименование | Кол-во | Цена | Сумма |\n';
           orderDescription += '|---|-------------|--------|------|-------|\n';
           
           orderItems.items.forEach((item, idx) => {
             const itemTotal = item.quantity * item.price;
-            orderDescription += '| ' + (idx + 1) + ' | ' + item.name + ' | ' + item.quantity + ' | ' + item.price.toFixed(2) + ' в‚Ѕ | ' + itemTotal.toFixed(2) + ' в‚Ѕ |\n';
+            orderDescription += '| ' + (idx + 1) + ' | ' + item.name + ' | ' + item.quantity + ' | ' + item.price.toFixed(2) + ' ₽ | ' + itemTotal.toFixed(2) + ' ₽ |\n';
           });
           
-          orderDescription += '| | | | **РРўРћР“Рћ:** | **' + orderItems.total.toFixed(2) + ' в‚Ѕ** |\n';
+          orderDescription += '| | | | **ИТОГО:** | **' + orderItems.total.toFixed(2) + ' ₽** |\n';
           
           const subtaskData = {
-            title: 'Р—Р°РєР°Р· (' + (companyResponse.data.data?.title || 'РљР»РёРµРЅС‚') + ')',
+            title: 'Заказ (' + (companyResponse.data.data?.title || 'Клиент') + ')',
             description: orderDescription,
             responsibleId: task.responsibleId || (req.currentUser ? req.currentUser.id : 10),
             parentId: parseInt(task.id),
@@ -333,18 +362,18 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
           console.log('Created order subtask:', orderSubtaskId);
           
           const XLSX = require('xlsx');
-          const companyName = companyResponse && companyResponse.data && companyResponse.data.data ? companyResponse.data.data.title : 'РљР»РёРµРЅС‚';
+          const companyName = companyResponse && companyResponse.data && companyResponse.data.data ? companyResponse.data.data.title : 'Клиент';
           const now = new Date().toLocaleString('ru-RU');
           
           const wb = XLSX.utils.book_new();
           
           const data = [
-            ['Р—Р°РєР°Р· РєР»РёРµРЅС‚Р°'],
+            ['Заказ клиента'],
             [''],
-            ['РљР»РёРµРЅС‚:', companyName],
-            ['Р”Р°С‚Р°:', now],
+            ['Клиент:', companyName],
+            ['Дата:', now],
             [''],
-            ['в„–', 'РќР°РёРјРµРЅРѕРІР°РЅРёРµ', 'РљРѕР»-РІРѕ', 'Р¦РµРЅР°', 'РЎСѓРјРјР°']
+            ['№', 'Наименование', 'Кол-во', 'Цена', 'Сумма']
           ];
           
           orderItems.items.forEach((item, idx) => {
@@ -358,7 +387,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
             ]);
           });
           
-          data.push(['', '', '', 'РРўРћР“Рћ:', orderItems.total]);
+          data.push(['', '', '', 'ИТОГО:', orderItems.total]);
           
           const ws = XLSX.utils.aoa_to_sheet(data);
           
@@ -370,7 +399,7 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
             { wch: 15 }
           ];
           
-          XLSX.utils.book_append_sheet(wb, ws, 'Р—Р°РєР°Р·');
+          XLSX.utils.book_append_sheet(wb, ws, 'Заказ');
           
           const excelBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
           const excelBase64 = excelBuffer.toString('base64');
@@ -401,7 +430,8 @@ app.post('/api/visit', upload.array('photos', 10), async (req, res) => {
             await axios.post(VIBECODE_BASE_URL + '/batch', attachBatchBody, {
               headers: {
                 'Authorization': 'Bearer ' + VIBECODE_API_KEY,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json; charset=utf-8',
+                'Accept': 'application/json'
               }
             });
             console.log('Attached Excel file to subtask:', orderSubtaskId);
@@ -476,7 +506,8 @@ app.get('/api/my-tasks', async (req, res) => {
     }
     const response = await callVibeCode('GET', '/tasks', { 
       limit: 50,
-      'filter[responsibleId]': userId
+      'filter[responsibleId]': userId,
+      'sort': '-createdDate'
     });
     res.json({ success: true, tasks: response.data.data || [] });
   } catch (error) {
@@ -492,6 +523,17 @@ app.get('/api/tasks/:id', async (req, res) => {
     res.json({ task: response.data.data });
   } catch (error) {
     console.error('Error fetching task:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get task comments
+app.get('/api/tasks/:id/comments', async (req, res) => {
+  try {
+    const response = await callVibeCode('GET', '/tasks/' + req.params.id + '/comments');
+    res.json({ success: true, comments: response.data.data || [] });
+  } catch (error) {
+    console.error('Error fetching comments:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -641,19 +683,218 @@ app.get('/api/user-context', async (req, res) => {
   }
 });
 
-// Logout - clear session and redirect to Black Hole logout
+// Logout - clear session
 app.post('/api/logout', (req, res) => {
   res.json({ success: true, message: 'Logged out' });
 });
 
+// Get visit statistics for a period
+app.get('/api/reports/stats', async (req, res) => {
+  try {
+    const period = req.query.period || 'today';
+    const now = new Date();
+    let startDate, endDate;
+    
+    if (period === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    } else if (period === 'week') {
+      const dayOfWeek = now.getDay() || 7;
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek + 1);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    } else if (period === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    }
+    
+    let userId;
+    if (req.currentUser) {
+      userId = req.currentUser.id;
+    } else {
+      const meResponse = await callVibeCode('GET', '/users/me');
+      userId = meResponse.data.data.id;
+    }
+    
+    const response = await callVibeCode('GET', '/tasks', {
+      'filter[createdDate][>=]': startDate.toISOString(),
+      'filter[createdDate][<]': endDate.toISOString(),
+      'filter[responsibleId]': userId,
+      'limit': 100
+    });
+    
+    const tasks = response.data.data || [];
+    const visitTasks = tasks.filter(t => t.ufCrmTask && t.ufCrmTask.length > 0);
+    
+    res.json({ success: true, totalVisits: visitTasks.length, period: period });
+  } catch (error) {
+    console.error('Error fetching stats:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate route from visit tasks and create report task
+app.post('/api/reports/route', async (req, res) => {
+  try {
+    const date = req.body.date || new Date().toLocaleDateString('ru-RU');
+    const groupId = req.body.groupId;
+    
+    const [day, month, year] = date.split('.');
+    const startDate = new Date(year, month - 1, day);
+    const endDate = new Date(year, month - 1, parseInt(day) + 1);
+    
+    let userId;
+    if (req.currentUser) {
+      userId = req.currentUser.id;
+    } else {
+      const meResponse = await callVibeCode('GET', '/users/me');
+      userId = meResponse.data.data.id;
+    }
+    
+    const response = await callVibeCode('GET', '/tasks', {
+      'filter[createdDate][>=]': startDate.toISOString(),
+      'filter[createdDate][<]': endDate.toISOString(),
+      'filter[responsibleId]': userId,
+      'filter[status]': '5',   // только завершённые
+      'limit': 100
+    });
+    
+    const tasks = response.data.data || [];
+    const visitTasks = tasks.filter(t => t.ufCrmTask && t.ufCrmTask.length > 0);
+    
+    if (visitTasks.length === 0) {
+      return res.status(400).json({ error: 'Нет визитов за ' + date });
+    }
+    
+    // СОРТИРУЕМ задачи по времени создания (по возрастанию)
+    visitTasks.sort((a, b) => new Date(a.createdDate) - new Date(b.createdDate));
+    
+    const routePoints = [];
+    for (const task of visitTasks) {
+      const desc = task.description || '';
+      // Ищем координаты в формате "📍 Координаты: 55.7558, 37.6173"
+      const coordMatch = desc.match(/📍 Координаты:\s*([\d.]+),\s*([\d.]+)/);
+      if (coordMatch) {
+        const lat = parseFloat(coordMatch[1]);
+        const lng = parseFloat(coordMatch[2]);
+        
+        let companyName = 'Компания';
+        let companyId = null;
+        if (task.ufCrmTask && task.ufCrmTask.length > 0) {
+          const crmRef = task.ufCrmTask[0];
+          if (crmRef.startsWith('CO_')) {
+            companyId = crmRef.replace('CO_', '');
+            try {
+              const companyResp = await callVibeCode('GET', '/companies/' + companyId);
+              companyName = companyResp.data.data?.title || 'Компания';
+            } catch (e) {
+              console.log('Could not fetch company:', companyId);
+            }
+          }
+        }
+        
+        routePoints.push({
+          lat: lat,
+          lng: lng,
+          title: companyName,
+          taskId: task.id,
+          time: task.createdDate ? new Date(task.createdDate).toLocaleTimeString('ru-RU') : ''
+        });
+      }
+    }
+    
+    if (routePoints.length === 0) {
+      return res.status(400).json({ error: 'В визитах не найдены координаты за ' + date });
+    }
+    
+    // Генерируем HTML с картой
+    const htmlContent = generateRouteHTML(routePoints, date);
+    
+    // Save HTML locally to public/routes/
+    const routesDir = path.join(__dirname, 'public', 'routes');
+    if (!fs.existsSync(routesDir)) {
+      fs.mkdirSync(routesDir, { recursive: true });
+    }
+    
+    const filename = 'Route_' + date.replace(/\./g, '_') + '_' + Date.now() + '.html';
+    const filePath = path.join(routesDir, filename);
+    fs.writeFileSync(filePath, htmlContent, 'utf-8');
+    
+    // Формируем правильный публичный URL для задачи
+    const publicUrl = 'https://app-116f18205548.vibecode.bitrix24.tech/routes/' + filename;
+    console.log('Route saved, public URL:', publicUrl);
+    
+    const reportTitle = 'Маршрут визитов на ' + date;
+    let reportDescription = 'Маршрут на ' + date + '\n\nТочек маршрута: ' + routePoints.length + '\n\nВизиты (в хронологическом порядке):\n' + 
+      routePoints.map((p, i) => (i + 1) + '. ' + p.title + ' (' + p.time + ')').join('\n');
+    
+    if (publicUrl) {
+      reportDescription += '\n\n[URL=' + publicUrl + ']Открыть карту маршрута[/URL]';
+    }
+    
+    const taskData = {
+      title: reportTitle,
+      description: reportDescription,
+      responsibleId: userId,
+      status: 2
+    };
+    
+    if (groupId) {
+      taskData.groupId = parseInt(groupId);
+    }
+    
+    const taskResponse = await callVibeCode('POST', '/tasks', taskData);
+    const taskId = taskResponse.data.data.id;
+    
+    res.json({
+      success: true,
+      taskId: taskId,
+      publicUrl: publicUrl,
+      pointsCount: routePoints.length,
+      date: date
+    });
+  } catch (error) {
+    console.error('Error generating route:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Функция генерации HTML-страницы с картой (с экранированием)
+function generateRouteHTML(routePoints, date) {
+  // Экранирование для использования в JavaScript строке (внутри одинарных/двойных кавычек)
+  const escapeForJS = (str) => {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+  };
+  // Экранирование для HTML (чтобы не ломало разметку)
+  const escapeForHTML = (str) => {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+
+  const markersJS = routePoints.map((p, i) => {
+    const escapedTitle = escapeForJS(p.title);
+    return 'L.marker([' + p.lat + ', ' + p.lng + '], {\n      icon: L.divIcon({\n        className: "visit-label",\n        html: "' + (i + 1) + '",\n        iconSize: [28, 28],\n        iconAnchor: [14, 14]\n      })\n    }).addTo(map).bindPopup("<b>' + (i + 1) + '. ' + escapedTitle + '</b><br>Координаты: ' + p.lat.toFixed(4) + ', ' + p.lng.toFixed(4) + '<br>Время: ' + p.time + '");';
+  }).join('\n    ');
+  
+  const routePointsStr = routePoints.map(p => '[' + p.lat + ', ' + p.lng + ']').join(', ');
+  
+  const pointsList = routePoints.map((p, i) => {
+    const escapedTitle = escapeForHTML(p.title);
+    return '<li><b>' + (i + 1) + '.</b> ' + escapedTitle + ' (' + p.lat.toFixed(4) + ', ' + p.lng.toFixed(4) + ')</li>';
+  }).join('\n            ');
+  
+  return '<!DOCTYPE html>\n<html lang="ru">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>Маршрут визитов на ' + date + '</title>\n  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />\n  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>\n  <style>\n    body { margin: 0; padding: 0; font-family: Arial, sans-serif; }\n    #map { height: 100vh; width: 100%; }\n    .visit-label { \n      background: #2563eb; \n      color: white; \n      border-radius: 50%; \n      width: 28px; \n      height: 28px; \n      display: flex; \n      align-items: center; \n      justify-content: center; \n      font-weight: bold; \n      font-size: 14px; \n      border: 2px solid white; \n      box-shadow: 0 2px 6px rgba(0,0,0,0.3); \n    }\n    .info-panel { \n      position: absolute; \n      top: 10px; \n      right: 10px; \n      background: white; \n      padding: 15px; \n      border-radius: 8px; \n      box-shadow: 0 2px 10px rgba(0,0,0,0.2); \n      z-index: 1000; \n      max-width: 300px; \n    }\n    .info-panel h2 { margin: 0 0 10px 0; font-size: 16px; }\n    .info-panel ul { margin: 0; padding-left: 18px; font-size: 13px; }\n    .info-panel li { margin-bottom: 5px; }\n  </style>\n</head>\n<body>\n  <div id="map"></div>\n  <div class="info-panel">\n    <h2>📍 Маршрут визитов</h2>\n    <ul>\n            ' + pointsList + '\n    </ul>\n    <p style="font-size:12px; color:#666; margin-top:10px;">\n      Всего точек: ' + routePoints.length + '<br>\n      Линия показывает порядок визитов (по времени создания задач)\n    </p>\n  </div>\n  <script>\n    const map = L.map("map").setView([' + routePoints[0].lat + ', ' + routePoints[0].lng + '], 10);\n    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {\n      attribution: "© OpenStreetMap contributors"\n    }).addTo(map);\n    ' + markersJS + '\n    const latlngs = [' + routePointsStr + '];\n    const routeLine = L.polyline(latlngs, {color: "#2563eb", weight: 4, opacity: 0.7, dashArray: "10, 10"}).addTo(map);\n    map.fitBounds(routeLine.getBounds(), {padding: [50, 50]});\n  </script>\n</body>\n</html>';
+}
+
 // Serve static files
 app.use(express.static('public', {
   maxAge: '1m',
-  setHeaders: (res, path) => {
-    if (path.endsWith('.html')) {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
     }
   }
 }));
@@ -663,6 +904,7 @@ app.get('/', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -670,7 +912,3 @@ app.listen(PORT, () => {
   console.log('Mobile Trade App running on port ' + PORT);
   console.log('VibeCode API Key configured: ' + (VIBECODE_API_KEY ? 'YES' : 'NO'));
 });
-
-
-
-
