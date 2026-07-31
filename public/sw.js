@@ -1,8 +1,8 @@
-﻿const CACHE_NAME = 'mobile-trade-v2';
+﻿const CACHE_NAME = 'mobile-trade-v8';
 const urlsToCache = [
   '/',
-  '/css/style.css?v=36',
-  '/js/app.js?v=36',
+  '/css/style.css?v=42',
+  '/js/app.js?v=42',
   '/manifest.json'
 ];
 
@@ -24,3 +24,7 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+
+
+
+
