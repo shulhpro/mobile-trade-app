@@ -194,24 +194,72 @@ function showScreen(screenId) {
   });
   document.getElementById(screenId).classList.add('active');
   window.scrollTo(0, 0);
+  
+  // Load stats when opening reports screen
+  if (screenId === 'reportsScreen') {
+    loadAllStats();
+  }
 }
 
 // Search companies
+let searchTimeout = null;
+
 function setupEventListeners() {
   const searchInput = document.getElementById('companySearch');
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      const filtered = companies.filter(c => 
-        (c.title || c.TITLE || '').toLowerCase().includes(query) ||
-        ((c.address || c.ADDRESS) && (c.address || c.ADDRESS).toLowerCase().includes(query))
-      );
-      renderCompanies(filtered);
+      const query = e.target.value.trim();
+      
+      // Очищаем предыдущий таймаут
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+      
+      // Если запрос пустой - показываем все компании
+      if (query.length === 0) {
+        renderCompanies(companies);
+        return;
+      }
+      
+      // Если меньше 2 символов - ищем локально
+      if (query.length < 2) {
+        const filtered = companies.filter(c => 
+          (c.title || c.TITLE || '').toLowerCase().includes(query.toLowerCase()) ||
+          ((c.address || c.ADDRESS) && (c.address || c.ADDRESS).toLowerCase().includes(query.toLowerCase()))
+        );
+        renderCompanies(filtered);
+        return;
+      }
+      
+      // Дебаунс для API запроса
+      searchTimeout = setTimeout(() => {
+        searchCompaniesAPI(query);
+      }, 300);
     });
     
     searchInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') e.preventDefault();
     });
+  }
+}
+
+// Search companies via API
+async function searchCompaniesAPI(query) {
+  const container = document.getElementById('companiesList');
+  container.innerHTML = '<div class="loading">Поиск...</div>';
+  
+  try {
+    const response = await fetch('/api/companies/search?q=' + encodeURIComponent(query));
+    const data = await response.json();
+    renderCompanies(data.result || []);
+  } catch (error) {
+    console.error('Error searching companies:', error);
+    // Fallback to local search
+    const filtered = companies.filter(c => 
+      (c.title || c.TITLE || '').toLowerCase().includes(query.toLowerCase()) ||
+      ((c.address || c.ADDRESS) && (c.address || c.ADDRESS).toLowerCase().includes(query.toLowerCase()))
+    );
+    renderCompanies(filtered);
   }
 }
 
@@ -670,6 +718,61 @@ function filterTasks(filter) {
 let currentTaskIdForComment = null;
 let taskCommentFiles = [];
 
+// Load task comments from portal
+async function loadTaskComments(taskId) {
+  try {
+    const response = await fetch('/api/tasks/' + taskId + '/comments');
+    const data = await response.json();
+    const comments = data.comments || [];
+    
+    const container = document.getElementById('commentsContainer');
+    const commentsList = document.getElementById('taskCommentsList');
+    
+    if (comments.length === 0) {
+      container.innerHTML = '<div class="no-comments">Нет комментариев</div>';
+      commentsList.style.display = 'block';
+      return;
+    }
+    
+    // Sort by date, newest first
+    comments.sort((a, b) => new Date(b.createdAt || b.createdDate) - new Date(a.createdAt || a.createdDate));
+    
+    container.innerHTML = comments.map(comment => {
+      const author = comment.author || {};
+      const authorName = (author.name || '') + ' ' + (author.lastName || '');
+      const date = comment.createdAt || comment.createdDate ? new Date(comment.createdAt || comment.createdDate).toLocaleString('ru-RU') : '';
+      const text = comment.message || comment.text || '';
+      
+      // Handle files if present
+      let filesHtml = '';
+      if (comment.ufTaskWebdavFiles && comment.ufTaskWebdavFiles.length > 0) {
+        filesHtml = '<div class="comment-files">' +
+          comment.ufTaskWebdavFiles.map(file => {
+            const fileName = file.name || 'Файл';
+            const fileUrl = file.url || '#';
+            return '<a href="' + fileUrl + '" target="_blank" class="comment-file">📎 ' + escapeHtml(fileName) + '</a>';
+          }).join('') +
+          '</div>';
+      }
+      
+      return '<div class="comment-item">' +
+        '<div class="comment-header">' +
+          '<span class="comment-author">' + escapeHtml(authorName.trim() || 'Система') + '</span>' +
+          '<span class="comment-date">' + date + '</span>' +
+        '</div>' +
+        '<div class="comment-text">' + escapeHtml(text) + '</div>' +
+        filesHtml +
+      '</div>';
+    }).join('');
+    
+    commentsList.style.display = 'block';
+  } catch (error) {
+    console.error('Error loading comments:', error);
+    document.getElementById('commentsContainer').innerHTML = '<div class="no-comments">Ошибка загрузки комментариев</div>';
+    document.getElementById('taskCommentsList').style.display = 'block';
+  }
+}
+
 // Show task detail
 function showTaskDetail(taskId) {
   const task = currentTasks.find(t => t.id == taskId);
@@ -708,6 +811,9 @@ function showTaskDetail(taskId) {
     '</div>';
   
   document.getElementById('taskDetail').innerHTML = detailHtml;
+  
+  // Load comments from portal
+  loadTaskComments(taskId);
   
   // Show/hide comment section
   const commentSection = document.getElementById('taskCommentSection');
@@ -926,5 +1032,89 @@ if ('serviceWorker' in navigator) {
 
 
 
+
+
+
+
+
+// ===== REPORTS FUNCTIONS =====
+
+// Load statistics for a period
+async function loadStats(period) {
+  try {
+    showLoadingOverlay(false);
+    const response = await fetch('/api/reports/stats?period=' + period);
+    const data = await response.json();
+    
+    if (data.success) {
+      // Update the corresponding stat card
+      const valueElement = document.getElementById('stat' + period.charAt(0).toUpperCase() + period.slice(1));
+      if (valueElement) {
+        valueElement.textContent = data.totalVisits;
+      }
+      
+      showToast('Статистика обновлена: ' + data.totalVisits + ' визитов');
+    } else {
+      showToast('Ошибка загрузки статистики');
+    }
+  } catch (error) {
+    console.error('Error loading stats:', error);
+    showToast('Ошибка соединения');
+  } finally {
+    hideLoadingOverlay();
+  }
+}
+
+// Load all stats on reports screen open
+async function loadAllStats() {
+  await loadStats('today');
+  await loadStats('week');
+  await loadStats('month');
+}
+
+// Generate today's route from task coordinates
+async function generateTodayRoute() {
+  const resultDiv = document.getElementById('routeResult');
+  
+  try {
+    showLoadingOverlay(false);
+    
+    const today = new Date().toLocaleDateString('ru-RU');
+    
+    const formData = new FormData();
+    formData.append('date', today);
+    if (selectedProjectId) {
+      formData.append('groupId', selectedProjectId);
+    }
+    
+    const response = await fetch('/api/reports/route', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      resultDiv.innerHTML = 
+        '<p><strong>✅ Маршрут создан!</strong></p>' +
+        '<p>Точек в маршруте: ' + data.pointsCount + '</p>' +
+        '<p>Задача: <a href="https://vibecode.bitrix24.tech/v1/tasks/' + data.taskId + '" target="_blank">Открыть в Битрикс24</a></p>';
+      resultDiv.className = 'route-result success';
+      showToast('Маршрут создан и прикреплен к задаче');
+    } else {
+      resultDiv.innerHTML = '<p>❌ ' + (data.error || 'Ошибка создания маршрута') + '</p>';
+      resultDiv.className = 'route-result error';
+      showToast(data.error || 'Ошибка создания маршрута');
+    }
+  } catch (error) {
+    console.error('Error generating route:', error);
+    resultDiv.innerHTML = '<p>❌ Ошибка соединения</p>';
+    resultDiv.className = 'route-result error';
+    showToast('Ошибка соединения');
+  } finally {
+    hideLoadingOverlay();
+    resultDiv.style.display = 'block';
+  }
+}
 
 
