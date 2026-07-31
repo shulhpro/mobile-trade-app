@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=36">
+  <link rel="stylesheet" href="css/style.css?v=42">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -37,6 +37,16 @@
             <p>Выберите действие</p>
           </div>
           
+          <!-- Project Selector -->
+          <div class="project-selector-container" id="projectSelectorContainer" style="display: none;">
+            <div class="project-selector">
+              <label>Проект</label>
+              <select id="projectSelect">
+                <option value="">-- Выберите проект --</option>
+              </select>
+            </div>
+          </div>
+          
           <div class="main-actions">
             <button class="main-action-btn visits" onclick="showScreen('companyScreen')">
               <span class="icon">🏢</span>
@@ -49,10 +59,53 @@
               <span class="label">Задачи</span>
               <span class="description">Мои текущие задачи</span>
             </button>
+            
+            <button class="main-action-btn reports" onclick="showScreen('reportsScreen')">
+              <span class="icon">📊</span>
+              <span class="label">Отчеты</span>
+              <span class="description">Статистика и маршруты</span>
+            </button>
           </div>
         </div>
       </section>
 
+      <!-- Reports Screen -->
+      <section id="reportsScreen" class="screen">
+        <button class="btn-back" onclick="showScreen('startScreen')">&lt; Назад</button>
+        <h2>📊 Отчеты</h2>
+        
+        <div class="reports-content">
+          <!-- Stats Cards -->
+          <div class="stats-grid">
+            <div class="stat-card" onclick="loadStats('today')">
+              <div class="stat-icon">📅</div>
+              <div class="stat-value" id="statToday">-</div>
+              <div class="stat-label">Визитов сегодня</div>
+            </div>
+            <div class="stat-card" onclick="loadStats('week')">
+              <div class="stat-icon">📆</div>
+              <div class="stat-value" id="statWeek">-</div>
+              <div class="stat-label">Визитов за неделю</div>
+            </div>
+            <div class="stat-card" onclick="loadStats('month')">
+              <div class="stat-icon">🗓️</div>
+              <div class="stat-value" id="statMonth">-</div>
+              <div class="stat-label">Визитов за месяц</div>
+            </div>
+          </div>
+          
+          <!-- Route Generator -->
+          <div class="route-section">
+            <h3>🗺️ Маршрут на сегодня</h3>
+            <p class="route-description">Сгенерируйте маршрут по компаниям с адресами</p>
+            <button class="btn-generate-route" onclick="generateTodayRoute()">
+              <span class="icon">🗺️</span>
+              Создать маршрут
+            </button>
+            <div id="routeResult" class="route-result" style="display: none;"></div>
+          </div>
+        </div>
+      </section>
       <!-- Company Selection Screen -->
       <section id="companyScreen" class="screen">
         <button class="btn-back" onclick="showScreen('startScreen')">&lt; Назад</button>
@@ -97,6 +150,14 @@
         <button class="btn-back" onclick="showScreen('tasksScreen')">&lt; Назад к задачам</button>
         <div class="task-detail-scroll">
           <div class="task-detail" id="taskDetail"></div>
+          
+          <!-- Comments from Portal -->
+          <div class="task-comments-list" id="taskCommentsList" style="display: none;">
+            <div class="form-section">
+              <h3>💬 Комментарии</h3>
+              <div id="commentsContainer"></div>
+            </div>
+          </div>
           
           <!-- Comment Section -->
           <div class="task-comment-section" id="taskCommentSection" style="display: none;">
@@ -209,9 +270,18 @@
         <div class="loading-text">Сохранение визита...</div>
       </div>
     </div>
-  <script src="js/app.js?v=36"></script>
+  <script src="js/app.js?v=42"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
 
 
 
